@@ -11,6 +11,7 @@ export interface ConversationApi {
   create(title: string): Promise<Conversation>;
   update(id: string, title: string): Promise<Conversation>;
   remove(id: string): Promise<void>;
+  get(id: string): Promise<unknown>;
 }
 
 export function createConversationApi(baseUrl: string, request: typeof fetch = fetch): ConversationApi {
@@ -31,6 +32,7 @@ export function createConversationApi(baseUrl: string, request: typeof fetch = f
     create: (title) => call<Conversation>('/conversations', { method: 'POST', body: JSON.stringify({ title }) }),
     update: (id, title) => call<Conversation>(`/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
     remove: (id) => call<void>(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    get: (id) => call<unknown>(`/conversations/${encodeURIComponent(id)}`),
   };
 }
 
