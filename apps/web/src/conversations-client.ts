@@ -1,10 +1,7 @@
 // The browser script is serialized intentionally; its DOM globals are evaluated in the browser.
 // @ts-nocheck
-export interface Conversation {
-  id: string;
-  title: string;
-  updatedAt: string;
-}
+import type { Conversation } from '@arborai/shared';
+export type { Conversation } from '@arborai/shared';
 
 export interface ConversationApi {
   list(): Promise<Conversation[]>;

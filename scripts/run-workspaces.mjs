@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
 const command = process.argv[2];
-const workspaces = ['apps/web', 'apps/api', 'packages/shared'];
+const workspaces = ['packages/shared', 'apps/api', 'apps/web'];
 
 if (!command) {
   console.error('Usage: node scripts/run-workspaces.mjs <dev|build|lint|typecheck|test>');

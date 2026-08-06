@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCreateConversationRequest, validateUpdateConversationRequest } from './conversations.validation.js';
+import { validateCreateConversationRequest, validateUpdateConversationRequest } from '@arborai/shared';
 
 test('conversation validation enforces title and system prompt limits', () => {
   assert.equal(validateCreateConversationRequest({ title: 'x'.repeat(201) }).success, false);

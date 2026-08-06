@@ -1,7 +1,7 @@
-export interface ConversationNode { id:string; conversationId:string; topicId:string; parentId:string|null; role:string; content:string; status:string; tokenCount:number|null; contextEnabled:boolean; errorMessage:string|null; prunedAt:string|null; createdAt:string; updatedAt:string }
+import type { ConversationNode, Topic, ConversationTreeResponse as SharedConversationTreeResponse } from '@arborai/shared';
+export type { ConversationNode, Topic } from '@arborai/shared';
 export interface ConversationTreeResponse { conversation:{activeNodeId:string|null}; nodes:ConversationNode[] }
-export interface Topic { id:string; conversationId:string; parentTopicId:string|null; title:string; description:string|null; activeNodeId:string|null; contextEnabled:boolean; archivedAt:string|null; createdAt:string; updatedAt:string }
-export interface WorkspaceResponse { conversation:{activeTopicId:string|null}; topics:Topic[]; nodes:ConversationNode[]; activeTopicId:string|null }
+export type WorkspaceResponse = SharedConversationTreeResponse;
 export type FlowNode={id:string;type:'conversation';position:{x:number;y:number};data:{node:ConversationNode;active:boolean;ancestor:boolean}};
 export type FlowEdge={id:string;source:string;target:string;active:boolean};
 const columnGap=260,rowGap=150;

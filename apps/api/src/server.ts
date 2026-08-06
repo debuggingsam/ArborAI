@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { PrismaClient } from '@prisma/client';
 import { getConfig, type ApiConfig } from './config.js';
 import { ConversationService, ConversationNotFoundError, TopicValidationError } from './conversations.service.js';
-import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateContextRequest } from './conversations.validation.js';
+import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateContextRequest } from '@arborai/shared';
 
 type Dependencies = { conversations: ConversationService };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

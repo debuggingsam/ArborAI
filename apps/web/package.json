@@ -10,6 +10,7 @@
     "test": "tsc -p tsconfig.json && node --test dist/**/*.test.js"
   },
   "dependencies": {
+    "@arborai/shared": "file:../../packages/shared",
     "@xyflow/react": "^12.11.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

@@ -2,8 +2,9 @@
 
 Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
 idempotent legacy-message backfill marker, compact migration capsules,
-validation reporting, and a comprehensive graph seed. It does not add
-TreeMaker, Context Engine, provider, or generation orchestration.
+validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
+runtime-validated frontend/backend contracts. Neither ticket adds TreeMaker,
+Context Engine, provider, or generation orchestration.
 
 ## Executive summary
 
@@ -25,7 +26,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | Package manager | npm, with a root helper (`scripts/run-workspaces.mjs`) that runs scripts in `apps/web`, `apps/api`, and `packages/shared`. The root `package.json` does **not** declare `workspaces`. |
 | Web app | Vite, React, React Flow, TypeScript. The Vite entry is `src/main.tsx`; `src/server.ts` and its browser client are legacy/unreferenced by Vite. |
 | API app | TypeScript ESM Node `http` server; Prisma client. No NestJS modules/controllers/gateway. |
-| Shared package | Node roles/statuses, partial conversation/topic DTOs, several request validators, and planned WebSocket event-name constants. |
+| Shared package | Runtime schemas and inferred types for workspaces, topics/capsules, message nodes, TreeMaker input/decisions, context previews, generation modes/responses, and realtime envelopes/payloads. API and web import its compatibility DTOs and validators. |
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
 | Providers/generation | Mock-only configuration validation exists, but no provider adapter, context assembly, generation endpoint, streaming, or persistence. |
@@ -73,8 +74,8 @@ These behaviors are compatible with the target architecture and should be preser
 ### API and realtime
 
 - The API must gain validated workspace/topic/message/generation operations described in the specification, without silently repurposing current public payloads.
-- Shared DTOs and runtime validators are incomplete, duplicated in `apps/api/src/conversations.validation.ts`, and do not yet cover topic updates, TreeMaker, capsules, generations, snapshots, or realtime envelopes.
-- `WebSocketEvent` contains a small planned event list, but there is no WebSocket implementation. The final events/envelope must be centralized in `packages/shared`.
+- Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The current API has not yet added the target TreeMaker, context-preview, or generation routes that will consume the newer validators.
+- There is no WebSocket implementation yet; the centralized realtime contract remains transport-ready only.
 - `GET /health` only returns `{ "status": "ok" }`; it does not verify database health.
 - Topic route handling is currently broken: `handleApiRequest` rejects every path other than `/conversations` and `/conversations/:id` before evaluating topic/node routes. The topic endpoints documented in `docs/api-contracts.md` therefore currently return `404`.
 - Topic/node identifiers are not UUID-validated. Topic update bodies bypass the corresponding validator.
@@ -91,8 +92,8 @@ These behaviors are compatible with the target architecture and should be preser
 
 - Retire the message-only `toFlowGraph` compatibility transform after callers/tests are migrated to the topic forest; do not remove it before a replacement is covered.
 - Retire the unreferenced static server/browser-client path after its viable Vite replacement has equivalent workspace-management coverage.
-- Replace duplicated API-local validators with shared validators once the shared contract is complete; preserve current request compatibility during the transition.
-- Replace the current WebSocket event constants with the specification’s complete event set and envelope only when a realtime gateway is implemented.
+- Keep the shared validators as the source of truth when adding new API routes; existing conversation-route compatibility remains preserved.
+- Use the centralized realtime event names and envelope when a gateway is implemented.
 - Do not expose `ConversationNode.role = system` as a normal message-node role in the new API unless a documented compatibility need remains.
 
 ## Current database and migration assessment
@@ -185,7 +186,7 @@ This is an audit-driven implementation checklist; ticket names can be aligned wi
 - [ ] 02 — Establish root scripts for format, unit, integration, browser, database, and benchmark workflows; fix test discovery.
 - [ ] 03 — Audit/repair fresh PostgreSQL migration behavior and document compatibility/backfill policy.
 - [ ] 04 — Add the remaining additive domain schema: capsules, TreeMaker runs, generations, and snapshots.
-- [ ] 05 — Implement and test shared runtime schemas, DTOs, discriminated generation requests, and realtime envelopes.
+- [x] 05 — Implement and test shared runtime schemas, DTOs, discriminated generation requests, and realtime envelopes.
 - [ ] 06 — Implement topic/message graph services: ownership, active IDs, cycle prevention, archive/prune, pin, and move.
 - [ ] 07 — Implement deterministic context capsules and safe migration/backfill behavior.
 - [ ] 08 — Implement the independently tested deterministic Context Engine and context-preview API.
