@@ -1,49 +1,12 @@
-export interface ConversationNode {
-  id: string; conversationId: string; parentId: string | null; role: string; content: string;
-  status: string; tokenCount: number | null; errorMessage: string | null; prunedAt: string | null;
-  createdAt: string; updatedAt: string;
-}
-export interface ConversationTreeResponse { conversation: { activeNodeId: string | null }; nodes: ConversationNode[] }
-
-export type FlowNode = { id: string; type: 'conversation'; position: { x: number; y: number }; data: { node: ConversationNode; active: boolean; ancestor: boolean } };
-export type FlowEdge = { id: string; source: string; target: string; active: boolean };
-
-const columnGap = 260;
-const rowGap = 150;
-
-export function truncateContent(content: string, maxLength = 120): string {
-  const singleLine = content.replace(/\s+/g, ' ').trim();
-  return singleLine.length <= maxLength ? singleLine : `${singleLine.slice(0, maxLength - 1)}…`;
-}
-
-export function ancestorIds(nodes: ConversationNode[], selectedId: string | null): Set<string> {
-  const byId = new Map(nodes.map(node => [node.id, node]));
-  const result = new Set<string>();
-  let current = selectedId ? byId.get(selectedId) : undefined;
-  while (current) {
-    result.add(current.id);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
-  return result;
-}
-
-export function toFlowGraph(response: ConversationTreeResponse, selectedId: string | null = response.conversation.activeNodeId): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const selectedAncestors = ancestorIds(response.nodes, selectedId);
-  const children = new Map<string | null, ConversationNode[]>();
-  response.nodes.forEach(node => children.set(node.parentId, [...(children.get(node.parentId) ?? []), node]));
-  const positions = new Map<string, { x: number; y: number }>();
-  let nextRow = 0;
-  const place = (parentId: string | null, depth: number) => {
-    for (const node of children.get(parentId) ?? []) {
-      const descendants = children.get(node.id) ?? [];
-      if (descendants.length) place(node.id, depth + 1);
-      const childRows = descendants.map(child => positions.get(child.id)?.y ?? 0);
-      const y = childRows.length ? childRows.reduce((sum, value) => sum + value, 0) / childRows.length : nextRow++ * rowGap;
-      positions.set(node.id, { x: depth * columnGap, y });
-    }
-  };
-  place(null, 0);
-  const nodes: FlowNode[] = response.nodes.map(node => ({ id: node.id, type: 'conversation', position: positions.get(node.id) ?? { x: 0, y: nextRow++ * rowGap }, data: { node, active: node.id === selectedId, ancestor: selectedAncestors.has(node.id) } }));
-  const edges = response.nodes.filter(node => node.parentId).map(node => ({ id: `${node.parentId}-${node.id}`, source: node.parentId as string, target: node.id, active: selectedAncestors.has(node.id) && selectedAncestors.has(node.parentId as string) }));
-  return { nodes, edges };
-}
+export interface ConversationNode { id:string; conversationId:string; topicId:string; parentId:string|null; role:string; content:string; status:string; tokenCount:number|null; contextEnabled:boolean; errorMessage:string|null; prunedAt:string|null; createdAt:string; updatedAt:string }
+export interface ConversationTreeResponse { conversation:{activeNodeId:string|null}; nodes:ConversationNode[] }
+export interface Topic { id:string; conversationId:string; parentTopicId:string|null; title:string; description:string|null; activeNodeId:string|null; contextEnabled:boolean; archivedAt:string|null; createdAt:string; updatedAt:string }
+export interface WorkspaceResponse { conversation:{activeTopicId:string|null}; topics:Topic[]; nodes:ConversationNode[]; activeTopicId:string|null }
+export type FlowNode={id:string;type:'conversation';position:{x:number;y:number};data:{node:ConversationNode;active:boolean;ancestor:boolean}};
+export type FlowEdge={id:string;source:string;target:string;active:boolean};
+const columnGap=260,rowGap=150;
+export function truncateContent(content:string,maxLength=120){const line=content.replace(/\s+/g,' ').trim();return line.length<=maxLength?line:`${line.slice(0,maxLength-1)}…`}
+export function ancestorIds(nodes:ConversationNode[],selectedId:string|null){const byId=new Map(nodes.map(n=>[n.id,n]));const result=new Set<string>();let current=selectedId?byId.get(selectedId):undefined;while(current){result.add(current.id);current=current.parentId?byId.get(current.parentId):undefined}return result}
+export function toFlowGraph(response:ConversationTreeResponse,selectedId:string|null=response.conversation.activeNodeId){const ancestors=ancestorIds(response.nodes,selectedId);return {nodes:response.nodes.map((node,i)=>({id:node.id,type:'conversation' as const,position:{x:0,y:i*rowGap},data:{node,active:node.id===selectedId,ancestor:ancestors.has(node.id)}})),edges:response.nodes.filter(n=>n.parentId).map(n=>({id:`${n.parentId}-${n.id}`,source:n.parentId!,target:n.id,active:ancestors.has(n.id)&&ancestors.has(n.parentId!)}))}}
+export type ForestNode={id:string;type:'topicNode'|'messageNode';position:{x:number;y:number};data:{topic?:Topic;node?:ConversationNode;active:boolean;ancestor:boolean}};
+export function toTopicForest(response:WorkspaceResponse,selectedTopicId:string|null,selectedNodeId:string|null){const topics=new Map(response.topics.map(t=>[t.id,t]));const topicPath=new Set<string>();let current=selectedTopicId?topics.get(selectedTopicId):undefined;while(current){topicPath.add(current.id);current=current.parentTopicId?topics.get(current.parentTopicId):undefined}const positions=new Map<string,{x:number;y:number}>();let row=0;const place=(parent:string|null,depth:number)=>{for(const topic of response.topics.filter(t=>t.parentTopicId===parent)){positions.set(topic.id,{x:depth*columnGap,y:row++*rowGap});place(topic.id,depth+1);for(const node of response.nodes.filter(n=>n.topicId===topic.id&&!n.parentId))positions.set(node.id,{x:(depth+1)*columnGap,y:row++*rowGap})}};place(null,0);const topicNodes:ForestNode[]=response.topics.map(t=>({id:`topic:${t.id}`,type:'topicNode',position:positions.get(t.id)??{x:0,y:row++*rowGap},data:{topic:t,active:t.id===selectedTopicId,ancestor:topicPath.has(t.id)}}));const messageNodes:ForestNode[]=response.nodes.map(n=>({id:`message:${n.id}`,type:'messageNode',position:positions.get(n.id)??{x:columnGap,y:row++*rowGap},data:{node:n,active:n.id===selectedNodeId,ancestor:false}}));const edges:FlowEdge[]=[];response.topics.filter(t=>t.parentTopicId).forEach(t=>edges.push({id:`topic-edge:${t.id}`,source:`topic:${t.parentTopicId}`,target:`topic:${t.id}`,active:topicPath.has(t.id)}));response.nodes.forEach(n=>{edges.push({id:`owner:${n.id}`,source:`topic:${n.topicId}`,target:`message:${n.id}`,active:n.topicId===selectedTopicId});if(n.parentId)edges.push({id:`message-edge:${n.id}`,source:`message:${n.parentId}`,target:`message:${n.id}`,active:n.id===selectedNodeId})});return {nodes:[...topicNodes,...messageNodes],edges}}

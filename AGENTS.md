@@ -10,7 +10,7 @@ This repository is the starting scaffold for ArborAI. The intended layout is:
 - `docs/`: architecture and development documentation.
 - `docker-compose.yml`: local infrastructure orchestration.
 
-At the time of this audit, those applications and infrastructure files have not yet been created.
+The current implementation uses a Vite/React frontend, React Flow, a TypeScript HTTP API, Prisma/PostgreSQL, and shared TypeScript contracts. Read `docs/product-model.md`, `docs/context-rules.md`, `docs/api-contracts.md`, `docs/project-status.md`, and `docs/architecture.md` before changing code.
 
 ## Package manager and commands
 
@@ -35,6 +35,8 @@ The root scripts currently provide a dependency-free baseline and report that th
 - `apps/web` may depend on `packages/shared`; `apps/api` may depend on `packages/shared`.
 - Shared packages must not depend on either application. The web and API applications must not import each other's implementation details.
 - Do not silently change public API contracts or WebSocket event payloads.
+- Keep topics and message nodes as distinct relationships; never flatten topics into message nodes.
+- Preserve mock-provider support and keep every ticket independently reviewable.
 
 ## Testing expectations
 

@@ -1,21 +1,16 @@
 import { PrismaClient, NodeRole, NodeStatus } from '@prisma/client';
-
 const prisma = new PrismaClient();
 try {
-  const conversation = await prisma.conversation.create({
-    data: {
-      title: 'ArborAI seed conversation',
-      systemPrompt: 'Answer clearly and concisely.',
-      nodes: { create: { role: NodeRole.user, content: 'What is a conversation tree?', status: NodeStatus.completed } },
-    },
-    include: { nodes: true },
-  });
-  const prompt = conversation.nodes[0];
-  const answer = await prisma.conversationNode.create({ data: { conversationId: conversation.id, parentId: prompt.id, role: NodeRole.assistant, content: 'A conversation tree preserves alternate paths from earlier messages.', status: NodeStatus.completed } });
-  await prisma.conversationNode.createMany({ data: [
-    { conversationId: conversation.id, parentId: prompt.id, role: NodeRole.assistant, content: 'It is a branching history of prompts and responses.', status: NodeStatus.completed },
-    { conversationId: conversation.id, parentId: answer.id, role: NodeRole.user, content: 'Show me another perspective.', status: NodeStatus.completed },
-  ] });
-  await prisma.conversation.update({ where: { id: conversation.id }, data: { activeNodeId: answer.id } });
-  console.log(`Seeded conversation ${conversation.id}`);
+  const workspace = await prisma.conversation.create({ data: { title: 'ArborAI workspace', systemPrompt: 'Answer clearly and concisely.' } });
+  const topic = await prisma.topic.create({ data: { conversationId: workspace.id, title: 'Building ArborAI', description: 'Product and architecture decisions.' } });
+  const subtopic = await prisma.topic.create({ data: { conversationId: workspace.id, parentTopicId: topic.id, title: 'Refresh-token storage', description: 'Authentication storage options.' } });
+  const independent = await prisma.topic.create({ data: { conversationId: workspace.id, title: 'Preparing for interviews', contextEnabled: false } });
+  const user = await prisma.conversationNode.create({ data: { conversationId: workspace.id, topicId: topic.id, role: NodeRole.user, content: 'How should authentication work?', status: NodeStatus.completed } });
+  const answerA = await prisma.conversationNode.create({ data: { conversationId: workspace.id, topicId: topic.id, parentId: user.id, role: NodeRole.assistant, content: 'Use short-lived access tokens and refresh tokens.', status: NodeStatus.completed } });
+  await prisma.conversationNode.create({ data: { conversationId: workspace.id, topicId: topic.id, parentId: user.id, role: NodeRole.assistant, content: 'Use a server-managed session with rotating credentials.', status: NodeStatus.completed, contextEnabled: false } });
+  await prisma.conversationNode.create({ data: { conversationId: workspace.id, topicId: subtopic.id, role: NodeRole.user, content: 'Should tokens use cookies?', status: NodeStatus.completed, parentId: null } });
+  await prisma.conversationNode.create({ data: { conversationId: workspace.id, topicId: independent.id, role: NodeRole.user, content: 'Help me explain this project.', status: NodeStatus.completed } });
+  await prisma.topic.update({ where: { id: topic.id }, data: { activeNodeId: answerA.id } });
+  await prisma.conversation.update({ where: { id: workspace.id }, data: { activeTopicId: topic.id } });
+  console.log(`Seeded workspace ${workspace.id}`);
 } finally { await prisma.$disconnect(); }

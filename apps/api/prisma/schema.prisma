@@ -24,10 +24,11 @@ model Conversation {
   id           String             @id @default(uuid()) @db.Uuid
   title        String
   systemPrompt String?
-  activeNodeId String?            @db.Uuid
+  activeTopicId String?           @db.Uuid
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   nodes        ConversationNode[]
+  topics       Topic[]
 
   @@index([updatedAt])
 }
@@ -35,20 +36,44 @@ model Conversation {
 model ConversationNode {
   id             String             @id @default(uuid()) @db.Uuid
   conversationId String             @db.Uuid
+  topicId        String             @db.Uuid
   parentId       String?            @db.Uuid
   role           NodeRole
   content        String
   status         NodeStatus
   tokenCount     Int?
+  contextEnabled Boolean            @default(true)
   errorMessage   String?
   prunedAt       DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  topic          Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
   parent         ConversationNode?  @relation("NodeTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       ConversationNode[] @relation("NodeTree")
 
   @@index([conversationId])
   @@index([parentId])
   @@index([conversationId, createdAt])
+  @@index([topicId])
+}
+
+model Topic {
+  id             String             @id @default(uuid()) @db.Uuid
+  conversationId String             @db.Uuid
+  parentTopicId  String?            @db.Uuid
+  title          String
+  description    String?
+  activeNodeId   String?            @db.Uuid
+  contextEnabled Boolean            @default(true)
+  archivedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent         Topic?             @relation("TopicTree", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  children       Topic[]            @relation("TopicTree")
+  nodes          ConversationNode[]
+  @@index([conversationId])
+  @@index([parentTopicId])
+  @@index([conversationId, archivedAt])
 }

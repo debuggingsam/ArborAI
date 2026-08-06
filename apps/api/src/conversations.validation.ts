@@ -28,3 +28,11 @@ export function validateUpdateConversationRequest(value: unknown): Result<{ titl
     [`systemPrompt must be at most ${ConversationSystemPromptMaxLength} characters`, !prompt || typeof value.systemPrompt !== 'string' || value.systemPrompt.length <= ConversationSystemPromptMaxLength],
   ]);
 }
+export function validateCreateTopicRequest(value: unknown): Result<{ title: string; description?: string; parentTopicId?: string | null }> {
+  if (!record(value)) return { success: false, errors: ['request must be an object'] };
+  return result(value, [['title must be a non-empty string', nonEmpty(value.title)], ['title must be at most 200 characters', typeof value.title === 'string' && value.title.length <= 200], ['description must be a string when provided', value.description === undefined || typeof value.description === 'string'], ['parentTopicId must be a string or null when provided', value.parentTopicId === undefined || value.parentTopicId === null || nonEmpty(value.parentTopicId)]]);
+}
+export function validateContextRequest(value: unknown): Result<{ contextEnabled: boolean }> {
+  if (!record(value)) return { success: false, errors: ['request must be an object'] };
+  return result(value, [['contextEnabled must be a boolean', typeof value.contextEnabled === 'boolean']]);
+}

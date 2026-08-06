@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { PrismaClient } from '@prisma/client';
 import { getConfig, type ApiConfig } from './config.js';
-import { ConversationService, ConversationNotFoundError } from './conversations.service.js';
-import { validateCreateConversationRequest, validateUpdateConversationRequest } from './conversations.validation.js';
+import { ConversationService, ConversationNotFoundError, TopicValidationError } from './conversations.service.js';
+import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateContextRequest } from './conversations.validation.js';
 
 type Dependencies = { conversations: ConversationService };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -32,6 +32,9 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
   const collection = path === '/conversations';
   const member = path.startsWith('/conversations/') && path.split('/').length === 3;
+  const topicCollection = path.match(/^\/conversations\/([^/]+)\/topics$/);
+  const topicMember = path.match(/^\/topics\/([^/]+)(?:\/(context|archive|restore))?$/);
+  const nodeContext = path.match(/^\/nodes\/([^/]+)\/context$/);
   if (!collection && !member) { json(response, 404, errorBody('not_found', 'Route not found.')); return; }
   try {
     if (collection && request.method === 'GET') { json(response, 200, await dependencies.conversations.list()); return; }
@@ -51,9 +54,23 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
       }
       if (request.method === 'DELETE') { await dependencies.conversations.delete(id); response.writeHead(204); response.end(); return; }
     }
+    if (topicCollection && request.method === 'POST') {
+      const body = await readBody(request); const validation = validateCreateTopicRequest(body);
+      if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid topic payload.', validation.errors)); return; }
+      json(response, 201, await dependencies.conversations.createTopic(topicCollection[1], validation.data)); return;
+    }
+    if (topicMember) {
+      const id = topicMember[1]; const action = topicMember[2];
+      if (action === 'archive' && request.method === 'POST') { json(response, 200, await dependencies.conversations.archiveTopic(id)); return; }
+      if (action === 'restore' && request.method === 'POST') { json(response, 200, await dependencies.conversations.restoreTopic(id)); return; }
+      if (action === 'context' && request.method === 'PATCH') { const validation = validateContextRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid context payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setTopicContext(id, validation.data.contextEnabled)); return; }
+      if (!action && request.method === 'PATCH') { const body = await readBody(request) as { title?: string; description?: string | null }; json(response, 200, await dependencies.conversations.updateTopic(id, body)); return; }
+    }
+    if (nodeContext && request.method === 'PATCH') { const validation = validateContextRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid context payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setNodeContext(nodeContext[1], validation.data.contextEnabled)); return; }
     json(response, 405, errorBody('method_not_allowed', 'Method not allowed.'));
   } catch (error) {
     if (error instanceof ConversationNotFoundError) { json(response, 404, errorBody('conversation_not_found', 'Conversation not found.')); return; }
+    if (error instanceof TopicValidationError) { json(response, 400, errorBody('topic_validation_error', error.message)); return; }
     if (error instanceof Error && error.message === 'invalid_json') { json(response, 400, errorBody('invalid_json', 'Request body must be valid JSON.')); return; }
     json(response, 500, errorBody('internal_error', 'An unexpected error occurred.'));
   }

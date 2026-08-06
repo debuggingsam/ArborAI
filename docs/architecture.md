@@ -2,17 +2,17 @@
 
 ## Current repository state
 
-ArborAI is currently an empty application scaffold. The architecture below is the intended baseline for the implementation tickets that follow; no Next.js app, NestJS app, database schema, WebSocket server, or Docker setup exists in this commit.
+ArborAI is a topic-aware visual workspace. The frontend is React/React Flow (Vite in the current scaffold), the API is TypeScript HTTP with Prisma, and PostgreSQL stores conversations, topics, and message nodes. The architecture is compatible with the planned Next.js/NestJS deployment shape.
 
 ## Components
 
 ### Web application
 
-`apps/web/` will contain the Next.js frontend and React Flow conversation workspace. It will render the conversation tree, track the selected/active node, submit prompts, and consume streamed response events from the API.
+`apps/web/` contains the React Flow forest workspace. Topic nodes and message nodes have distinct graph semantics; roots are independent topics, child topics attach to parent topics, and messages attach to their owning topic.
 
 ### API application
 
-`apps/api/` will contain the NestJS backend. It will expose conversation and prompt operations, coordinate context assembly and model execution, persist tree changes, and publish response-stream events over WebSockets.
+`apps/api/` exposes conversation, topic, message-context, and generation operations, coordinates the topic-aware context engine and AI-provider abstraction, persists changes, and publishes response-stream events over WebSockets.
 
 The conversation REST API currently exposes `GET/POST /conversations` and `GET/PATCH/DELETE /conversations/:conversationId`. Creation and updates validate a non-empty title (maximum 200 characters) and a system prompt of at most 10,000 characters. Collection results are ordered by most recently updated conversation; tree nodes are ordered by creation time. A conversation load returns metadata plus all non-pruned nodes, including `parentId` and `activeNodeId`. Invalid UUIDs return `400` and missing conversations return `404` with `{ "error": { "code": "...", "message": "..." } }`.
 
@@ -24,32 +24,50 @@ The conversation REST API currently exposes `GET/POST /conversations` and `GET/P
 
 PostgreSQL will persist conversations and their nodes. The primary relationship is the node `parentId`, which forms a tree while `conversationId` scopes nodes to a conversation.
 
-## Conversation tree data model
+## Topic-aware data model
 
 ```text
-Conversation
+Conversation (workspace)
   id
   title
   systemPrompt
-  activeNodeId
+  activeTopicId
   createdAt
   updatedAt
 
-ConversationNode
+Topic
+  id, conversationId, parentTopicId, title, description
+  activeNodeId, contextEnabled, archivedAt
+
+ConversationNode (message)
   id
-  conversationId
+  conversationId, topicId
   parentId
   role
   content
   status
   tokenCount
+  contextEnabled
   errorMessage
   prunedAt
   createdAt
   updatedAt
 ```
 
-Submitting a prompt from an existing node creates a new user node whose `parentId` is the selected node. The API then creates an assistant node beneath it and updates that node as the response streams.
+Submitting a prompt from an existing node creates a new user node in the selected topic. Regeneration may create multiple assistant children of one user node. Topic hierarchy never uses message `parentId`.
+
+```mermaid
+sequenceDiagram
+  participant UI as React Flow workspace
+  participant API as API
+  participant C as Context engine
+  participant AI as Mock/AI provider
+  UI->>API: generation request(topic, selected node, mode)
+  API->>C: assemble eligible topic/message paths
+  C->>AI: system + context + prompt
+  AI-->>API: streamed deltas
+  API-->>UI: node/status/content WebSocket events
+```
 
 ## Context assembly
 
@@ -75,4 +93,4 @@ The initial migration creates indexes for conversation lookup, parent lookup, an
 
 ## Local development
 
-PostgreSQL is configured with `DATABASE_URL` in `.env`. From the repository root, use `npm run db:migrate --workspace @arborai/api` to apply migrations and `npm run db:seed --workspace @arborai/api` to add development data. `npm run db:reset --workspace @arborai/api` is destructive and intended only for local development; it resets the database and runs the seed automatically. Keep `AI_PROVIDER=mock` for offline development.
+PostgreSQL is configured with `DATABASE_URL` in `apps/api/.env`. From the repository root, use `npm run db:migrate --prefix apps/api` to apply migrations and `npm run db:seed --prefix apps/api` to add development data. `npm run db:reset --prefix apps/api` is destructive and intended only for local development; it resets the database and runs the seed automatically. Keep `AI_PROVIDER=mock` for offline development. The web app runs at `http://localhost:5173` and uses `VITE_API_URL` or defaults to `http://localhost:3001`.

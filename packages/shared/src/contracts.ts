@@ -28,7 +28,7 @@ export interface Conversation {
   id: string;
   title: string;
   systemPrompt: string;
-  activeNodeId: string | null;
+  activeTopicId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,20 +36,33 @@ export interface Conversation {
 export interface ConversationNode {
   id: string;
   conversationId: string;
+  topicId: string;
   parentId: string | null;
   role: NodeRole;
   content: string;
   status: NodeStatus;
   tokenCount: number | null;
+  contextEnabled: boolean;
   errorMessage: string | null;
   prunedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface TopicDto {
+  id: string; conversationId: string; parentTopicId: string | null; title: string; description: string | null;
+  activeNodeId: string | null; contextEnabled: boolean; archivedAt: string | null; createdAt: string; updatedAt: string;
+}
+export interface CreateTopicRequest { title: string; description?: string; parentTopicId?: string | null }
+export interface UpdateTopicRequest { title?: string; description?: string | null }
+export interface SetTopicContextRequest { contextEnabled: boolean }
+export interface SetNodeContextRequest { contextEnabled: boolean }
+
 export interface ConversationTreeResponse {
   conversation: Conversation;
+  topics: TopicDto[];
   nodes: ConversationNode[];
+  activeTopicId: string | null;
 }
 
 export interface CreateConversationRequest {
@@ -116,6 +129,21 @@ export function validateUpdateConversationRequest(value: unknown): ValidationRes
 export function validateCreateBranchRequest(value: unknown): ValidationResult<CreateBranchRequest> {
   if (!isRecord(value)) return { success: false, errors: ['request must be an object'] };
   return validate<CreateBranchRequest>(value, [['parentNodeId must be a non-empty string', isNonEmptyString(value.parentNodeId)]]);
+}
+
+export function validateCreateTopicRequest(value: unknown): ValidationResult<CreateTopicRequest> {
+  if (!isRecord(value)) return { success: false, errors: ['request must be an object'] };
+  return validate<CreateTopicRequest>(value, [
+    ['title must be a non-empty string', isNonEmptyString(value.title)],
+    [`title must be at most ${ConversationTitleMaxLength} characters`, typeof value.title === 'string' && value.title.length <= ConversationTitleMaxLength],
+    ['description must be a string when provided', value.description === undefined || typeof value.description === 'string'],
+    ['parentTopicId must be a string or null when provided', value.parentTopicId === undefined || value.parentTopicId === null || isNonEmptyString(value.parentTopicId)],
+  ]);
+}
+
+export function validateContextRequest(value: unknown): ValidationResult<{ contextEnabled: boolean }> {
+  if (!isRecord(value)) return { success: false, errors: ['request must be an object'] };
+  return validate<{ contextEnabled: boolean }>(value, [['contextEnabled must be a boolean', typeof value.contextEnabled === 'boolean']]);
 }
 
 export function validateStartGenerationRequest(value: unknown): ValidationResult<StartGenerationRequest> {
