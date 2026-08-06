@@ -1,0 +1,16 @@
+{
+  "name": "arborai",
+  "private": true,
+  "version": "0.0.0",
+  "description": "ArborAI visual AI conversation workspace",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/run-workspaces.mjs dev",
+    "build": "node scripts/run-workspaces.mjs build",
+    "lint": "node scripts/run-workspaces.mjs lint",
+    "typecheck": "node scripts/run-workspaces.mjs typecheck",
+    "test": "node scripts/run-workspaces.mjs test"
+  }
+}
