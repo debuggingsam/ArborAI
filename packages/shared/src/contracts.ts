@@ -83,6 +83,8 @@ type ValidationResult<T> = { success: true; data: T } | { success: false; errors
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+export const ConversationTitleMaxLength = 200;
+export const ConversationSystemPromptMaxLength = 10_000;
 const validate = <T>(value: unknown, checks: Array<[string, boolean]>): ValidationResult<T> => {
   const errors = checks.filter(([, valid]) => !valid).map(([name]) => name);
   return errors.length ? { success: false, errors } : { success: true, data: value as T };
@@ -92,7 +94,22 @@ export function validateCreateConversationRequest(value: unknown): ValidationRes
   if (!isRecord(value)) return { success: false, errors: ['request must be an object'] };
   return validate<CreateConversationRequest>(value, [
     ['title must be a non-empty string', isNonEmptyString(value.title)],
+    [`title must be at most ${ConversationTitleMaxLength} characters`, typeof value.title === 'string' && value.title.length <= ConversationTitleMaxLength],
     ['systemPrompt must be a string when provided', value.systemPrompt === undefined || typeof value.systemPrompt === 'string'],
+    [`systemPrompt must be at most ${ConversationSystemPromptMaxLength} characters`, value.systemPrompt === undefined || typeof value.systemPrompt !== 'string' || value.systemPrompt.length <= ConversationSystemPromptMaxLength],
+  ]);
+}
+
+export function validateUpdateConversationRequest(value: unknown): ValidationResult<Partial<CreateConversationRequest>> {
+  if (!isRecord(value)) return { success: false, errors: ['request must be an object'] };
+  const hasTitle = value.title !== undefined;
+  const hasSystemPrompt = value.systemPrompt !== undefined;
+  return validate<Partial<CreateConversationRequest>>(value, [
+    ['request must include title or systemPrompt', hasTitle || hasSystemPrompt],
+    ['title must be a non-empty string when provided', !hasTitle || isNonEmptyString(value.title)],
+    [`title must be at most ${ConversationTitleMaxLength} characters`, !hasTitle || (typeof value.title === 'string' && value.title.length <= ConversationTitleMaxLength)],
+    ['systemPrompt must be a string when provided', !hasSystemPrompt || typeof value.systemPrompt === 'string'],
+    [`systemPrompt must be at most ${ConversationSystemPromptMaxLength} characters`, !hasSystemPrompt || typeof value.systemPrompt !== 'string' || value.systemPrompt.length <= ConversationSystemPromptMaxLength],
   ]);
 }
 

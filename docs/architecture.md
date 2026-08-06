@@ -14,6 +14,8 @@ ArborAI is currently an empty application scaffold. The architecture below is th
 
 `apps/api/` will contain the NestJS backend. It will expose conversation and prompt operations, coordinate context assembly and model execution, persist tree changes, and publish response-stream events over WebSockets.
 
+The conversation REST API currently exposes `GET/POST /conversations` and `GET/PATCH/DELETE /conversations/:conversationId`. Creation and updates validate a non-empty title (maximum 200 characters) and a system prompt of at most 10,000 characters. Collection results are ordered by most recently updated conversation; tree nodes are ordered by creation time. A conversation load returns metadata plus all non-pruned nodes, including `parentId` and `activeNodeId`. Invalid UUIDs return `400` and missing conversations return `404` with `{ "error": { "code": "...", "message": "..." } }`.
+
 ### Shared package
 
 `packages/shared/` contains the contracts shared by the web and API applications: conversation DTOs, node enums, WebSocket event names, and dependency-free runtime validators for external request payloads. Its public API is exported from `packages/shared/src/index.ts`, and the package must remain independent of both applications.
@@ -65,6 +67,12 @@ The context-management engine starts at the selected node and walks parent links
 
 WebSocket event names belong in `packages/shared/` and are exposed through the `WebSocketEvent` constant. Any contract change must be reflected in the relevant documentation and tests. The current request validators cover conversation creation, branch creation, and generation-start payloads; response and event payload validation can be extended as those transports are implemented.
 
+## Persistence
+
+Prisma manages the PostgreSQL schema in `apps/api/prisma`. Deleting a conversation cascades to its nodes. Deleting an individual node sets its children's `parentId` to null, preserving those nodes; application code must still validate that a new parent belongs to the same conversation. `prunedAt` is a soft-prune marker: normal repository queries exclude marked nodes, while the rows remain recoverable.
+
+The initial migration creates indexes for conversation lookup, parent lookup, and conversation chronology. The development seed creates one conversation with a prompt/response path and two branches.
+
 ## Local development
 
-The application directories, Docker Compose configuration, database migrations, and environment variables have not yet been implemented. See `.env.example` for the planned configuration surface and `AGENTS.md` for the currently available root commands.
+PostgreSQL is configured with `DATABASE_URL` in `.env`. From the repository root, use `npm run db:migrate --workspace @arborai/api` to apply migrations and `npm run db:seed --workspace @arborai/api` to add development data. `npm run db:reset --workspace @arborai/api` is destructive and intended only for local development; it resets the database and runs the seed automatically. Keep `AI_PROVIDER=mock` for offline development.
