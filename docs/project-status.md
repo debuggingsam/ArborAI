@@ -1,6 +1,8 @@
-# Repository audit — Ticket 00
+# Project status
 
-Audited on 2026-08-06 against `docs/refactor-spec.md`. This ticket documents the baseline only; it does not begin the target architecture refactor.
+Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 03 adds
+TreeMaker-run, generation, and immutable context-snapshot persistence; it does
+not add TreeMaker, Context Engine, provider, or generation orchestration.
 
 ## Executive summary
 
@@ -23,7 +25,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | Web app | Vite, React, React Flow, TypeScript. The Vite entry is `src/main.tsx`; `src/server.ts` and its browser client are legacy/unreferenced by Vite. |
 | API app | TypeScript ESM Node `http` server; Prisma client. No NestJS modules/controllers/gateway. |
 | Shared package | Node roles/statuses, partial conversation/topic DTOs, several request validators, and planned WebSocket event-name constants. |
-| Persistence | Prisma/PostgreSQL schema and two committed SQL migrations. Topics are first-class. |
+| Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
 | Providers/generation | Mock-only configuration validation exists, but no provider adapter, context assembly, generation endpoint, streaming, or persistence. |
 | Infrastructure | No `docker-compose.yml`, Dockerfiles, or GitHub Actions files. |
