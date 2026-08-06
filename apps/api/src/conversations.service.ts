@@ -25,7 +25,22 @@ export class ConversationService {
   async createTopic(conversationId: string, data: { title: string; description?: string; parentTopicId?: string | null }) {
     const conversation = await this.repository.findConversation(conversationId); if (!conversation) throw new ConversationNotFoundError();
     if (data.parentTopicId) { const parent = await this.repository.findTopic(data.parentTopicId); if (!parent || parent.conversationId !== conversationId) throw new TopicValidationError('Parent topic belongs to another conversation.'); }
-    return this.toTopic(await this.repository.createTopic({ conversationId, parentTopicId: data.parentTopicId ?? null, title: data.title.trim(), description: data.description ?? null }));
+    return this.toTopic(await this.repository.createTopic({ conversationId, parentTopicId: data.parentTopicId ?? null, title: data.title.trim(), description: data.description ?? null, createdBy: 'user' }));
+  }
+  async moveTopic(id: string, parentTopicId: string | null) {
+    const topic = await this.requireTopic(id);
+    await this.assertValidTopicParent(topic, parentTopicId);
+    return this.toTopic(await this.repository.updateTopic(id, { parentTopicId }));
+  }
+  async setTopicActiveNode(id: string, activeNodeId: string | null) {
+    const topic = await this.requireTopic(id);
+    if (activeNodeId) {
+      const node = await this.repository.findNode(activeNodeId);
+      if (!node || node.conversationId !== topic.conversationId || node.topicId !== topic.id || node.prunedAt) {
+        throw new TopicValidationError('Active node must be a visible message in the topic.');
+      }
+    }
+    return this.toTopic(await this.repository.updateTopic(id, { activeNodeId }));
   }
   async updateTopic(id: string, data: { title?: string; description?: string | null }) { try { return this.toTopic(await this.repository.updateTopic(id, { ...data, title: data.title?.trim() })); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
   async setTopicContext(id: string, enabled: boolean) { try { return this.toTopic(await this.repository.updateTopicContext(id, enabled)); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
@@ -42,6 +57,25 @@ export class ConversationService {
   async delete(id: string) {
     try { await this.repository.deleteConversation(id); }
     catch (error) { if (this.isNotFound(error)) throw new ConversationNotFoundError(); throw error; }
+  }
+
+  private async requireTopic(id: string) {
+    const topic = await this.repository.findTopic(id);
+    if (!topic) throw new TopicValidationError('Topic not found.');
+    return topic;
+  }
+  private async assertValidTopicParent(topic: { id: string; conversationId: string }, parentTopicId: string | null) {
+    if (!parentTopicId) return;
+    if (parentTopicId === topic.id) throw new TopicValidationError('A topic cannot be its own parent.');
+    const visited = new Set<string>([topic.id]);
+    let currentId: string | null = parentTopicId;
+    while (currentId) {
+      if (visited.has(currentId)) throw new TopicValidationError('Topic parent would create a cycle.');
+      visited.add(currentId);
+      const current = await this.repository.findTopic(currentId);
+      if (!current || current.conversationId !== topic.conversationId) throw new TopicValidationError('Parent topic belongs to another conversation.');
+      currentId = current.parentTopicId;
+    }
   }
 
   private toConversation(value: { id: string; title: string; systemPrompt: string | null; activeTopicId: string | null; createdAt: Date; updatedAt: Date }) {

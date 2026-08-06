@@ -13,8 +13,17 @@ export class ConversationRepository {
 
   listTopics(conversationId: string) { return this.db.topic.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } }); }
   findTopic(id: string) { return this.db.topic.findUnique({ where: { id } }); }
+  findNode(id: string) { return this.db.conversationNode.findUnique({ where: { id } }); }
   createTopic(data: Prisma.TopicUncheckedCreateInput) { return this.db.topic.create({ data }); }
-  updateTopic(id: string, data: Prisma.TopicUpdateInput) { return this.db.topic.update({ where: { id }, data }); }
+  updateTopic(id: string, data: Prisma.TopicUncheckedUpdateInput) { return this.db.topic.update({ where: { id }, data }); }
+  createTreeMakerRun(data: Prisma.TreeMakerRunUncheckedCreateInput) { return this.db.treeMakerRun.create({ data }); }
+  createGeneration(data: Prisma.GenerationUncheckedCreateInput) { return this.db.generation.create({ data }); }
+  createGenerationContextSnapshot(data: Prisma.GenerationContextSnapshotUncheckedCreateInput) {
+    return this.db.generationContextSnapshot.create({ data });
+  }
+  findGenerationContextSnapshot(generationId: string) {
+    return this.db.generationContextSnapshot.findUnique({ where: { generationId } });
+  }
   updateNodeContext(id: string, contextEnabled: boolean) { return this.db.conversationNode.update({ where: { id }, data: { contextEnabled } }); }
   updateTopicContext(id: string, contextEnabled: boolean) { return this.db.topic.update({ where: { id }, data: { contextEnabled } }); }
 
@@ -33,6 +42,9 @@ export class ConversationRepository {
       if (parent.conversationId !== data.conversationId) throw new Error('Parent node belongs to another conversation.');
       if (parent.topicId !== data.topicId) throw new Error('Parent node belongs to another topic.');
     }
+    const topic = await this.db.topic.findUnique({ where: { id: data.topicId }, select: { conversationId: true } });
+    if (!topic) throw new Error('Topic not found.');
+    if (topic.conversationId !== data.conversationId) throw new Error('Topic belongs to another conversation.');
     return this.db.conversationNode.create({ data });
   }
 }

@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE "Topic" (
   "id" UUID NOT NULL,
   "conversationId" UUID NOT NULL,

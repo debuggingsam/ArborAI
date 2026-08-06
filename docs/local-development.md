@@ -1,12 +1,45 @@
 # Local development
 
-ArborAI currently has a database-free, offline development baseline. Node.js 20 or newer and npm are required.
+## Current runnable scaffold
 
-1. Copy `.env.example` to `.env` at the repository root and ensure PostgreSQL is available at `DATABASE_URL`.
-2. Run `npm install`.
-3. Run `npm run db:migrate --workspace @arborai/api` and, optionally, `npm run db:seed --workspace @arborai/api`.
-4. Run `npm run dev` from the repository root. The API is available at `http://localhost:3001/health` and the web status page at `http://localhost:3000`.
+ArborAI currently runs a Vite/React web app and TypeScript HTTP API, with
+Prisma configured for PostgreSQL. It is not yet the target Next.js/NestJS or
+WebSocket implementation. Use Node.js 20+ and npm.
 
-The web application shell loads conversations from the API and supports creating, selecting (via `?conversation=<id>`), renaming, and deleting them. It displays understandable loading/empty/error states and a backend connection indicator; the graph, node details, and prompt composer are placeholders for later tickets. Override `NEXT_PUBLIC_API_URL` for the browser API URL; the local default is used when omitted. The API only accepts `WEB_ORIGIN` as its configured CORS origin and requires `API_PORT`, `WEB_ORIGIN`, and `AI_PROVIDER`. Keep `AI_PROVIDER=mock` for offline development.
+```bash
+npm install
+npm run dev
+```
 
-`npm run db:reset --workspace @arborai/api` is a local-only reset-and-seed command. Validation commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+The API defaults to `http://localhost:3001` and the Vite app defaults to
+`http://localhost:5173`. API configuration is read from `apps/api/.env`; the
+web app uses `VITE_API_URL` and defaults to the API URL above. Keep
+`AI_PROVIDER=mock` for credential-free local development and tests.
+
+For PostgreSQL work, configure `DATABASE_URL` in `apps/api/.env`, then run:
+
+```bash
+npm run db:migrate --prefix apps/api
+npm run db:seed --prefix apps/api
+```
+
+`npm run db:reset --prefix apps/api` is destructive local-only reset-and-seed
+work; do not run it against shared data. The database is required for migration
+and seed commands and is not supplied by the repository yet.
+
+## Verification
+
+Run from the repository root:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+There is currently no formatter command, dedicated integration/browser suite,
+Docker Compose configuration, or root database helper. Do not claim these
+target capabilities exist until their tickets implement them. Real-provider
+activation, when implemented, will use backend-only provider credentials and
+model environment variables; mock mode must remain the default offline path.

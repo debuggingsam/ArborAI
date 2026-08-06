@@ -1,23 +1,63 @@
 # ArborAI product model
 
-ArborAI models a Conversation as the overall workspace. A workspace contains independent or nested Topics and each Topic contains message nodes.
+ArborAI is a visual AI knowledge workspace. An AI routing agent automatically
+organizes prompts into an existing topic, a new subtopic, or an independent root
+topic. A deterministic Context Engine then assembles enabled topic capsules and
+the selected message path for the answering model.
 
-- A root Topic is an independent subject in a workspace.
-- A child Topic is a subtopic of another Topic; topic hierarchy is separate from message hierarchy.
-- A ConversationNode is a user or assistant message belonging to exactly one Topic.
-- `parentId` links messages within one Topic. A message branch is one conversational path.
-- Alternative assistant responses are multiple assistant children of one user node; they are optional branches, not the workspace structure.
-- Topic and message context selection is independent from archive/prune state. Exclusion keeps content visible; archive and prune are lifecycle operations.
-- `activeTopicId` selects the workspace topic. `Topic.activeNodeId` selects its active message path. UI selection may select either one topic or one message at a time.
+The workspace is not merely an alternative-response tree: topic hierarchy and
+message branching are distinct structures.
+
+## Core terms
+
+| Term | Meaning |
+| --- | --- |
+| Workspace | The top-level environment containing topics, messages, settings, and generations. `Conversation` may remain the persistence name during compatibility work. |
+| Root topic | An independent subject with no parent topic. Its context is isolated from other root topics. |
+| Subtopic | A topic under another topic, with its own messages and a compact inherited understanding of its lineage. |
+| Message node | One user or assistant message belonging to exactly one topic. `parentId` links messages only within that topic. |
+| Alternative assistant response | An explicitly requested regenerated response: another assistant child of the same user message. It is not created by a normal follow-up. |
+| Topic context capsule | A bounded, self-contained summary of durable facts, decisions, constraints, and open questions for one topic, with source IDs. It is not an ancestor transcript copy. |
+| TreeMaker run | A persisted, debuggable routing attempt containing compact tree input, a validated placement decision, confidence, and fallback/error state. |
+| Generation | One answering-model operation: placement, user and assistant nodes, context snapshot, model configuration, usage, and terminal status. |
+| Generation context snapshot | An immutable record of exactly the messages, inclusions, exclusions, warnings, and budget used for one generation. It is historical evidence, not future context. |
+| Context exclusion | A reversible instruction to omit a topic or message from model context while retaining it in the graph. Disabled ancestors effectively exclude descendants. |
+| Topic archive | A reversible lifecycle state that hides a topic and descendants from normal graph queries and excludes them from context. |
+| Message pruning | A soft removal from normal graph and context queries. The stored node remains recoverable; a streaming node cannot be pruned. |
+
+## Relationships and invariants
 
 ```mermaid
 flowchart TD
-  W[Conversation workspace] --> T1[Root topic]
-  W --> T2[Independent root topic]
-  T1 --> ST[Child topic]
-  T1 --> M1[User message]
-  M1 --> A1[Assistant response A]
-  M1 --> A2[Assistant response B]
-  ST --> M2[User message]
-  M2 --> A3[Assistant message]
+  W[Workspace] --> R1[Root topic: Authentication]
+  W --> R2[Root topic: Deployment]
+  R1 --> S[Subtopic: Refresh tokens]
+  R1 -. owns .-> U1[User message]
+  U1 --> A1[Assistant response A]
+  U1 --> A2[Alternative assistant response B]
+  S -. owns .-> U2[User message]
+  U2 --> A3[Assistant response]
 ```
+
+- Topic hierarchy uses `parentTopicId`; it cannot cross workspace boundaries or
+  contain cycles.
+- Message hierarchy uses `parentId`; a parent belongs to the same workspace and
+  topic. Root messages in a topic have no message parent.
+- `activeTopicId` belongs to the workspace and `activeNodeId` belongs to its
+  topic and is visible.
+- Archive, prune, and context exclusion are separate. Excluding content does
+  not delete it; archiving does not rewrite the workspace system prompt.
+- Canonical knowledge lives in topics, capsules, messages, and workspace
+  configuration. No raw-transcript duplication is canonical.
+
+## Context and generation model
+
+TreeMaker determines organization, the Context Engine determines what the
+answering model receives, and the answering model produces the user-facing
+answer. The persisted generation snapshot records the exact result of context
+selection even if capsules or context settings later change.
+
+Each capsule contains a concise `summary`, bounded `facts`, `decisions`,
+`constraints`, and `openQuestions`, plus source topic/node IDs and generation
+metadata. Capsule updates may compress inherited knowledge for a subtopic, but
+may not change topic relationships or contain credentials.

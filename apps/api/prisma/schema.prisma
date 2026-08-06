@@ -20,60 +20,169 @@ enum NodeStatus {
   error
 }
 
+enum TopicCreatedBy {
+  user
+  tree_maker
+  migration
+}
+
+enum TreeMakerRunStatus {
+  completed
+  failed
+  fallback
+}
+
+enum GenerationMode {
+  auto_route
+  manual_continue
+  manual_subtopic
+  manual_root_topic
+  regenerate
+}
+
+enum GenerationStatus {
+  pending
+  streaming
+  completed
+  error
+}
+
 model Conversation {
-  id           String             @id @default(uuid()) @db.Uuid
-  title        String
-  systemPrompt String?
-  activeTopicId String?           @db.Uuid
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  nodes        ConversationNode[]
-  topics       Topic[]
+  id            String             @id @default(uuid()) @db.Uuid
+  title         String
+  systemPrompt  String?
+  activeTopicId String?            @db.Uuid
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  nodes         ConversationNode[]
+  topics        Topic[]
+  treeMakerRuns TreeMakerRun[]
+  generations   Generation[]
 
   @@index([updatedAt])
 }
 
 model ConversationNode {
-  id             String             @id @default(uuid()) @db.Uuid
-  conversationId String             @db.Uuid
-  topicId        String             @db.Uuid
-  parentId       String?            @db.Uuid
-  role           NodeRole
-  content        String
-  status         NodeStatus
-  tokenCount     Int?
-  contextEnabled Boolean            @default(true)
-  errorMessage   String?
-  prunedAt       DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  topic          Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  parent         ConversationNode?  @relation("NodeTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children       ConversationNode[] @relation("NodeTree")
+  id                   String             @id @default(uuid()) @db.Uuid
+  conversationId       String             @db.Uuid
+  topicId              String             @db.Uuid
+  parentId             String?            @db.Uuid
+  role                 NodeRole
+  content              String
+  status               NodeStatus
+  tokenCount           Int?
+  contextEnabled       Boolean            @default(true)
+  pinned               Boolean            @default(false)
+  errorMessage         String?
+  prunedAt             DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  conversation         Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  topic                Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  activeForTopics      Topic[]            @relation("TopicActiveNode")
+  userGenerations      Generation[]       @relation("GenerationUserNode")
+  assistantGenerations Generation[]       @relation("GenerationAssistantNode")
+  parent               ConversationNode?  @relation("NodeTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children             ConversationNode[] @relation("NodeTree")
 
   @@index([conversationId])
   @@index([parentId])
   @@index([conversationId, createdAt])
+  @@index([conversationId, prunedAt])
   @@index([topicId])
 }
 
 model Topic {
-  id             String             @id @default(uuid()) @db.Uuid
-  conversationId String             @db.Uuid
-  parentTopicId  String?            @db.Uuid
-  title          String
-  description    String?
-  activeNodeId   String?            @db.Uuid
-  contextEnabled Boolean            @default(true)
-  archivedAt     DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  parent         Topic?             @relation("TopicTree", fields: [parentTopicId], references: [id], onDelete: SetNull)
-  children       Topic[]            @relation("TopicTree")
-  nodes          ConversationNode[]
+  id               String             @id @default(uuid()) @db.Uuid
+  conversationId   String             @db.Uuid
+  parentTopicId    String?            @db.Uuid
+  title            String
+  description      String?
+  activeNodeId     String?            @db.Uuid
+  activeNode       ConversationNode?  @relation("TopicActiveNode", fields: [activeNodeId], references: [id], onDelete: SetNull)
+  contextEnabled   Boolean            @default(true)
+  archivedAt       DateTime?
+  contextCapsule   Json?
+  capsuleVersion   Int                @default(0)
+  capsuleUpdatedAt DateTime?
+  createdBy        TopicCreatedBy     @default(migration)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  conversation     Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent           Topic?             @relation("TopicTree", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  children         Topic[]            @relation("TopicTree")
+  nodes            ConversationNode[]
+  generations      Generation[]
+
   @@index([conversationId])
   @@index([parentTopicId])
   @@index([conversationId, archivedAt])
+}
+
+model TreeMakerRun {
+  id             String             @id @default(uuid()) @db.Uuid
+  conversationId String             @db.Uuid
+  newPrompt      String
+  activeTopicId  String?            @db.Uuid
+  activeNodeId   String?            @db.Uuid
+  inputTreeIndex Json
+  outputDecision Json?
+  provider       String
+  model          String
+  confidence     Float?
+  status         TreeMakerRunStatus
+  errorMessage   String?
+  createdAt      DateTime           @default(now())
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  generations    Generation[]
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, status])
+}
+
+model Generation {
+  id               String                     @id @default(uuid()) @db.Uuid
+  conversationId   String                     @db.Uuid
+  topicId          String                     @db.Uuid
+  treeMakerRunId   String?                    @db.Uuid
+  userNodeId       String                     @db.Uuid
+  assistantNodeId  String                     @db.Uuid
+  mode             GenerationMode
+  provider         String
+  model            String
+  status           GenerationStatus
+  inputTokenCount  Int?
+  outputTokenCount Int?
+  errorMessage     String?
+  startedAt        DateTime                   @default(now())
+  completedAt      DateTime?
+  conversation     Conversation               @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  topic            Topic                      @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  treeMakerRun     TreeMakerRun?              @relation(fields: [treeMakerRunId], references: [id], onDelete: SetNull)
+  userNode         ConversationNode           @relation("GenerationUserNode", fields: [userNodeId], references: [id], onDelete: Restrict)
+  assistantNode    ConversationNode           @relation("GenerationAssistantNode", fields: [assistantNodeId], references: [id], onDelete: Restrict)
+  contextSnapshot  GenerationContextSnapshot?
+
+  @@index([conversationId, startedAt])
+  @@index([topicId, startedAt])
+  @@index([treeMakerRunId])
+  @@index([userNodeId])
+  @@index([assistantNodeId])
+  @@index([conversationId, status])
+}
+
+model GenerationContextSnapshot {
+  id                   String     @id @default(uuid()) @db.Uuid
+  generationId         String     @unique @db.Uuid
+  orderedModelMessages Json
+  includedTopicIds     Json
+  includedNodeIds      Json
+  excludedTopicIds     Json
+  excludedNodeIds      Json
+  exclusions           Json
+  warnings             Json
+  estimatedInputTokens Int
+  maxInputTokens       Int?
+  createdAt            DateTime   @default(now())
+  generation           Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
 }
