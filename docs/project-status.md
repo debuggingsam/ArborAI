@@ -1,8 +1,9 @@
 # Project status
 
-Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 03 adds
-TreeMaker-run, generation, and immutable context-snapshot persistence; it does
-not add TreeMaker, Context Engine, provider, or generation orchestration.
+Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
+idempotent legacy-message backfill marker, compact migration capsules,
+validation reporting, and a comprehensive graph seed. It does not add
+TreeMaker, Context Engine, provider, or generation orchestration.
 
 ## Executive summary
 
@@ -11,7 +12,7 @@ The repository is an npm multi-package repository (not an npm-workspaces monorep
 - `apps/web` is a Vite + React 19 + React Flow application, not Next.js.
 - `apps/api` is a Node `http` server with Prisma, not NestJS.
 - `packages/shared` is a dependency-free TypeScript contracts package.
-- PostgreSQL is the configured datastore; four Prisma SQL migrations define conversations, topics/capsules, message nodes, TreeMaker runs, generations, and immutable context snapshots.
+- PostgreSQL is the configured datastore; five Prisma SQL migrations define conversations, topics/capsules, message nodes, TreeMaker runs, generations, immutable context snapshots, and legacy-backfill support.
 
 The codebase has already completed part of the topic-domain migration: a topic has a distinct hierarchy from a message node, message nodes reference a topic, and the web graph renders topic and message nodes differently. It has not implemented the TreeMaker, context-capsule, deterministic context-engine, generation, provider, realtime, correction, or end-to-end workflow required by the refactor specification.
 
@@ -44,7 +45,7 @@ These behaviors are compatible with the target architecture and should be preser
 - Topics have context-enabled, archived, active-node, capsule, version, timestamp, and creation-source fields; conversations have an active-topic field.
 - TreeMaker decisions, generation lifecycle metadata, and immutable JSON context snapshots have persistence models, but no TreeMaker, Context Engine, or generation workflow yet uses them.
 - Normal conversation loading excludes soft-pruned nodes.
-- The seed includes root and child topics, an independent topic, a disabled topic, and alternative assistant responses.
+- The seed includes multiple roots, nested subtopics, a linear message thread, alternative assistant responses, disabled topic/message states, a pinned message, a generation snapshot, and a TreeMaker run.
 - The React Flow transformation uses distinct `topicNode` and `messageNode` types and separate topic, ownership, and message edges.
 - The root quality-command helper and dependency-free shared contracts are suitable foundations.
 - `AI_PROVIDER=mock` is required by current API configuration and requires no credential.
@@ -58,7 +59,7 @@ These behaviors are compatible with the target architecture and should be preser
 - `ConversationNode` needs the required `pinned` state. Node-role `system` exists today but is outside the target message-node role model and needs an explicit compatibility/removal decision.
 - `TreeMakerRun`, `Generation`, and `GenerationContextSnapshot` persistence exists; orchestration, validation, and lifecycle services do not.
 - The topic and message models require service-level cycle validation, ownership validation for active IDs, and lifecycle rules beyond foreign keys.
-- The initial topic migration created one imported topic per conversation and reassigned all legacy nodes. It did not create migration capsules.
+- The initial topic migration created one imported topic per conversation and reassigned all legacy nodes. The Ticket 04 follow-up marks that root, adds a compact provenance capsule without transcript copying, and provides a repeatable validation-first backfill command.
 
 ### Context and generations
 

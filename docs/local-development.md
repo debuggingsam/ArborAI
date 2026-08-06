@@ -20,8 +20,24 @@ For PostgreSQL work, configure `DATABASE_URL` in `apps/api/.env`, then run:
 
 ```bash
 npm run db:migrate --prefix apps/api
+npm run db:backfill --prefix apps/api
 npm run db:seed --prefix apps/api
 ```
+
+`db:backfill` is the safe, repeatable compatibility step for databases that
+contain the original message-only conversations. It first prints JSON validation
+for orphaned nodes, cross-conversation or cross-topic parent references, missing
+active nodes, and message cycles. If any issue is found, it exits non-zero and
+makes no backfill changes. A successful run recognizes the uniquely marked
+legacy imported root, preserves `parentId`, creates only a compact provenance
+capsule, and does not copy historical transcripts. Re-running it does not
+create another imported topic or flatten workspaces that have since acquired
+additional topics.
+
+Before running it against a valuable database, take a normal PostgreSQL backup.
+The change is additive: recovery is normally restoring that backup, or clearing
+the `legacyImportKey`, capsule, and active pointers only after reviewing the
+printed report. Do not use `db:reset` as recovery; it deletes local data.
 
 `npm run db:reset --prefix apps/api` is destructive local-only reset-and-seed
 work; do not run it against shared data. The database is required for migration
