@@ -1,0 +1,6 @@
+{
+  "name": "@arborai/web",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsc -p tsconfig.json && node dist/server.js", "build": "tsc -p tsconfig.json", "lint": "tsc -p tsconfig.json --noEmit", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "tsc -p tsconfig.json && node --test dist/**/*.test.js" }
+}

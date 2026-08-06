@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const command = process.argv[2];
 const workspaces = ['apps/web', 'apps/api', 'packages/shared'];
@@ -20,6 +20,16 @@ const runnable = workspaces.filter((workspace) => {
 if (runnable.length === 0) {
   console.log(`No workspace scripts found for “${command}”; repository scaffold is ready for application setup.`);
   process.exit(0);
+}
+
+if (command === 'dev') {
+  const children = runnable.map((workspace) => spawn('npm', ['run', command], { cwd: workspace, stdio: 'inherit' }));
+  const stop = () => children.forEach((child) => child.kill('SIGTERM'));
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  await Promise.race(children.map((child) => new Promise((resolve) => child.once('exit', (code) => resolve(code ?? 1)))));
+  stop();
+  process.exit(1);
 }
 
 for (const workspace of runnable) {

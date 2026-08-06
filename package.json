@@ -3,8 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "description": "ArborAI visual AI conversation workspace",
-  "engines": {
-    "node": ">=20"
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
   },
   "scripts": {
     "dev": "node scripts/run-workspaces.mjs dev",
