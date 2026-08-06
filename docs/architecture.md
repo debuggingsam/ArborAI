@@ -16,7 +16,7 @@ ArborAI is currently an empty application scaffold. The architecture below is th
 
 ### Shared package
 
-`packages/shared/` will contain contracts shared by the web and API applications: DTOs, event names, enums, and validation schemas. It must remain independent of both applications.
+`packages/shared/` contains the contracts shared by the web and API applications: conversation DTOs, node enums, WebSocket event names, and dependency-free runtime validators for external request payloads. Its public API is exported from `packages/shared/src/index.ts`, and the package must remain independent of both applications.
 
 ### Persistence
 
@@ -63,7 +63,7 @@ The context-management engine starts at the selected node and walks parent links
 6. The web client applies those events to the React Flow graph and renders the streaming response.
 7. On completion, the API records the final status and token count. On failure, it records `errorMessage` and emits an error/completion event.
 
-WebSocket event names and payloads belong in `packages/shared/` once implemented. Any contract change must be reflected in the relevant documentation and tests.
+WebSocket event names belong in `packages/shared/` and are exposed through the `WebSocketEvent` constant. Any contract change must be reflected in the relevant documentation and tests. The current request validators cover conversation creation, branch creation, and generation-start payloads; response and event payload validation can be extended as those transports are implemented.
 
 ## Local development
 
