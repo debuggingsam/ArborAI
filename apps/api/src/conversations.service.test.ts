@@ -65,3 +65,32 @@ test('rejects an archived topic as a new parent', async () => {
     /Archived topics cannot be parents/,
   );
 });
+
+test('pruning a branch preserves alternative siblings and falls back the active node', async () => {
+  const parent = { id: 'user', conversationId: 'workspace', topicId: 'topic', parentId: null, role: 'user', content: 'Prompt', status: 'completed', prunedAt: null };
+  const prunedAssistant = { id: 'answer-a', conversationId: 'workspace', topicId: 'topic', parentId: 'user', role: 'assistant', content: 'A', status: 'completed', prunedAt: null };
+  const siblingAssistant = { id: 'answer-b', conversationId: 'workspace', topicId: 'topic', parentId: 'user', role: 'assistant', content: 'B', status: 'completed', prunedAt: null };
+  const updates: unknown[] = [];
+  const activeTopic = { ...topic('topic', 'workspace'), activeNodeId: 'answer-a' };
+  const db = {
+    conversationNode: {
+      findUnique: async ({ where: { id } }: { where: { id: string } }) => [parent, prunedAssistant, siblingAssistant].find((node) => node.id === id) ?? null,
+      findMany: async () => [parent, prunedAssistant, siblingAssistant],
+      updateMany: async (value: unknown) => { updates.push(value); return { count: 1 }; },
+    },
+    topic: {
+      findUnique: async () => activeTopic,
+      update: async (value: unknown) => { updates.push(value); return activeTopic; },
+    },
+  } as never;
+  const result = await new ConversationService(db).pruneNode('answer-a');
+  assert.equal(result.prunedNodeCount, 1);
+  assert.equal(result.activeNodeId, 'user');
+  assert.deepEqual((updates[0] as { where: { id: { in: string[] } } }).where.id.in, ['answer-a']);
+});
+
+test('rejects pruning a streaming branch', async () => {
+  const node = { id: 'streaming', conversationId: 'workspace', topicId: 'topic', parentId: null, role: 'assistant', status: 'streaming', prunedAt: null };
+  const db = { conversationNode: { findUnique: async () => node, findMany: async () => [node] } } as never;
+  await assert.rejects(() => new ConversationService(db).pruneNode('streaming'), /cannot be pruned/);
+});

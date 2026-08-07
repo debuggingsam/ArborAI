@@ -66,6 +66,9 @@ export class ConversationRepository {
   updateNodeContext(id: string, contextEnabled: boolean) { return this.db.conversationNode.update({ where: { id }, data: { contextEnabled } }); }
   updateNodePin(id: string, pinned: boolean) { return this.db.conversationNode.update({ where: { id }, data: { pinned } }); }
   updateTopicContext(id: string, contextEnabled: boolean) { return this.db.topic.update({ where: { id }, data: { contextEnabled } }); }
+  updateNodesPruned(ids: string[], prunedAt: Date) {
+    return this.db.conversationNode.updateMany({ where: { id: { in: ids } }, data: { prunedAt } });
+  }
 
   updateConversation(id: string, data: Prisma.ConversationUpdateInput) { return this.db.conversation.update({ where: { id }, data }); }
 
@@ -73,6 +76,9 @@ export class ConversationRepository {
 
   listActiveNodes(conversationId: string) {
     return this.db.conversationNode.findMany({ where: { conversationId, prunedAt: null }, orderBy: { createdAt: 'asc' } });
+  }
+  listNodes(conversationId: string) {
+    return this.db.conversationNode.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } });
   }
 
   async createNode(data: Prisma.ConversationNodeUncheckedCreateInput) {

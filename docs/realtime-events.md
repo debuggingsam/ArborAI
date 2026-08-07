@@ -1,8 +1,8 @@
 # Realtime events
 
 Realtime keeps the React Flow graph current during routing and streaming. Event
-names and envelope types are shared from `packages/shared/`; the current
-scaffold has constants but no WebSocket transport yet.
+names and envelope types are shared from `packages/shared/`. The Node API
+serves a dependency-free RFC6455 transport at `WS_PATH` (default `/ws`).
 
 ## Envelope
 
@@ -50,5 +50,11 @@ capsule.updated
 generation.failed
 ```
 
-The gateway must scope events to a workspace. Until a gateway exists, REST
-refetch remains the source of truth.
+Graph correction events are emitted after their persistence change. `topic.moved`
+includes the new nullable parent ID, archive/restore events carry the changed
+topic, and `node.pruned` includes all pruned descendant IDs plus the topic
+active-node fallback when one changed. Clients update optimistically for their
+own action and refetch the normal graph after archive, restore, move, or prune.
+
+The gateway scopes events to a workspace. REST refetch remains the source of
+truth after reconnecting or if an event was missed.

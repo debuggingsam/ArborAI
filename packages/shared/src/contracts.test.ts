@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, TreeMakerInputSchema, TreeMakerPreviewRequestSchema, TreeMakerPreviewResponseSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
+import { ComparisonRequestSchema, ComparisonResponseSchema, ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TopicContextCapsuleSchema, TreeMakerDecisionSchema, TreeMakerInputSchema, TreeMakerPreviewRequestSchema, TreeMakerPreviewResponseSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
 
 test('exports stable node and WebSocket contract values', () => {
   assert.equal(NodeRole.Assistant, 'assistant');
@@ -46,6 +46,13 @@ test('validates the TreeMaker decision union at runtime', () => {
   assert.equal(TreeMakerDecisionSchema.safeParse({ action: 'continue_topic', topicId: 'topic', confidence: 1.4, reasoning: 'Bad confidence' }).success, false);
 });
 
+test('validates compact, bounded topic capsules at runtime', () => {
+  const capsule = { summary: 'A concise topic summary.', facts: [], decisions: [], constraints: [], openQuestions: [], sourceTopicIds: ['topic'], sourceNodeIds: [] };
+  assert.equal(TopicContextCapsuleSchema.safeParse(capsule).success, true);
+  assert.equal(TopicContextCapsuleSchema.safeParse({ ...capsule, facts: ['x'.repeat(241)] }).success, false);
+  assert.equal(TopicContextCapsuleSchema.safeParse({ ...capsule, summary: ' ' }).success, false);
+});
+
 test('validates TreeMaker preview request and response contracts', () => {
   const decision = { action: 'create_root_topic', title: 'Deployment', description: null, provisionalCapsule: null, confidence: 0.9, reasoning: 'Independent subject' };
   assert.equal(TreeMakerPreviewRequestSchema.safeParse({ prompt: 'Deploy this', activeTopicId: null, activeNodeId: null }).success, true);
@@ -69,4 +76,10 @@ test('validates context previews and rejects malformed realtime envelopes', () =
   const valid = { eventId: 'event', eventType: WebSocketEvent.AssistantDelta, workspaceId: 'workspace', generationId: 'generation', occurredAt: '2026-08-06T00:00:00.000Z', payload: { eventType: WebSocketEvent.AssistantDelta, assistantNodeId: 'node', delta: 'Hello' } };
   assert.equal(WebSocketEventEnvelopeSchema.safeParse(valid).success, true);
   assert.equal(WebSocketEventEnvelopeSchema.safeParse({ ...valid, payload: { eventType: WebSocketEvent.AssistantDelta, assistantNodeId: 'node' } }).success, false);
+});
+
+test('validates two distinct comparison selections and a comparison response', () => {
+  assert.equal(ComparisonRequestSchema.safeParse({ left: { type: 'topic', id: 'left' }, right: { type: 'node', id: 'right' } }).success, true);
+  assert.equal(ComparisonRequestSchema.safeParse({ left: { type: 'topic', id: 'same' }, right: { type: 'topic', id: 'same' } }).success, false);
+  assert.equal(ComparisonResponseSchema.safeParse({ workspaceId: 'workspace', nearestCommonTopicId: null, nearestCommonMessageId: null, sharedTopicPathIds: [], sharedMessagePathIds: [], left: { selection: { type: 'topic', id: 'left' }, topicPathIds: ['left'], messagePathIds: [], branchTopicIds: ['left'], branchMessageIds: [] }, right: { selection: { type: 'topic', id: 'right' }, topicPathIds: ['right'], messagePathIds: [], branchTopicIds: ['right'], branchMessageIds: [] } }).success, true);
 });

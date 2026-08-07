@@ -1,0 +1,23 @@
+.sidebar > button,
+.details button,
+.preview-drawer button { font: inherit; border: 1px solid #cbd4e1; border-radius: 6px; background: #fff; color: #35445d; padding: 7px 9px; cursor: pointer; }
+.sidebar > button { margin-top: 16px; width: 100%; }
+.archived-list { display: grid; gap: 8px; margin-top: 12px; font-size: 12px; }
+.archived-list > div { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+.archived-list button { padding: 3px 6px; }
+.inspector-actions { display: grid; gap: 8px; margin-top: 18px; }
+.inspector-actions label { display: grid; gap: 5px; font-size: 12px; color: #657289; }
+.inspector-actions select { padding: 6px; border: 1px solid #cbd4e1; border-radius: 6px; }
+.details .danger { color: #a12c2c; border-color: #e0aaaa; }
+.preview-drawer { position: absolute; z-index: 8; right: 310px; top: 68px; bottom: 0; width: 360px; background: #fff; border-left: 1px solid #dce2eb; box-shadow: -8px 0 24px #23395d20; padding: 18px; overflow: auto; }
+.preview-drawer header { display: flex; align-items: center; justify-content: space-between; }
+.preview-drawer h2 { font-size: 16px; margin: 0; }
+.preview-drawer h3 { font-size: 13px; margin: 22px 0 8px; }
+.preview-item { display: grid; width: 100%; gap: 4px; text-align: left; margin: 6px 0; background: #f7f9fc !important; border-color: #dce2eb !important; font-size: 12px; }
+.preview-item span { color: #657289; overflow-wrap: anywhere; }
+.preview-item.exclusion { background: #fff7f3 !important; }
+.warning { font-size: 12px; background: #fff3d7; color: #825e13; padding: 8px; border-radius: 6px; }
+.comparison-shared { outline: 3px solid #55d6be; }
+.comparison-left { outline: 3px solid #5b8def; }
+.comparison-right { outline: 3px solid #e28a4c; }
+.active-compare { border-color: #55d6be; color: #126d5a; }

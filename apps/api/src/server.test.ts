@@ -61,3 +61,56 @@ test('TreeMaker preview dispatches without graph mutations', async () => {
   assert.equal(result.result().status, 200);
   assert.deepEqual(calls, [[workspaceId, { prompt: 'Follow up', activeTopicId: null, activeNodeId: null }]]);
 });
+
+test('context preview dispatches a validated read-only request', async () => {
+  const calls: unknown[] = [];
+  const result = response();
+  await handleApiRequest(
+    { port: 3001, webOrigin: 'http://localhost:3000', aiProvider: 'mock', wsPath: '/ws' },
+    request('POST', `/workspaces/${workspaceId}/context-preview`, { topicId, anchorNodeId: null, newPrompt: 'Follow up', maxInputTokens: 100 }),
+    result.response,
+    { conversations: {} as never, contextPreview: { preview: async (...args: unknown[]) => { calls.push(args); return { messages: [], includedTopicIds: [], includedNodeIds: [], excludedTopicIds: [], excludedNodeIds: [], exclusions: [], warnings: [], trimmedNodeIds: [], estimatedInputTokens: 0, maxInputTokens: 100 }; } } as never },
+  );
+  assert.equal(result.result().status, 200);
+  assert.deepEqual(calls, [[workspaceId, { topicId, anchorNodeId: null, newPrompt: 'Follow up', maxInputTokens: 100 }]]);
+});
+
+test('context preview returns predictable validation errors', async () => {
+  const result = response();
+  await handleApiRequest(
+    { port: 3001, webOrigin: 'http://localhost:3000', aiProvider: 'mock', wsPath: '/ws' },
+    request('POST', `/workspaces/${workspaceId}/context-preview`, { topicId: '', anchorNodeId: null, newPrompt: '', maxInputTokens: 0 }),
+    result.response,
+    { conversations: {} as never, contextPreview: {} as never },
+  );
+  assert.deepEqual(result.result(), { status: 400, body: { error: { code: 'validation_error', message: 'Invalid context preview payload.', details: ['topicId must be a non-empty string', 'newPrompt must be a non-empty string', 'maxInputTokens must be a positive integer when provided'] } } });
+});
+
+test('comparison dispatches two validated graph selections without mutation', async () => {
+  const calls: unknown[] = [];
+  const result = response();
+  await handleApiRequest(
+    { port: 3001, webOrigin: 'http://localhost:3000', aiProvider: 'mock', wsPath: '/ws' },
+    request('POST', `/workspaces/${workspaceId}/comparison`, { left: { type: 'topic', id: 'left' }, right: { type: 'node', id: 'right' } }),
+    result.response,
+    { conversations: {} as never, comparisons: { compare: async (...args: unknown[]) => { calls.push(args); return { workspaceId, sharedTopicPathIds: [], sharedMessagePathIds: [] }; } } as never },
+  );
+  assert.equal(result.result().status, 200);
+  assert.deepEqual(calls, [[workspaceId, { left: { type: 'topic', id: 'left' }, right: { type: 'node', id: 'right' } }]]);
+});
+
+test('prune and archived-topic routes dispatch correction operations', async () => {
+  const calls: unknown[] = [];
+  const service = {
+    pruneNode: async (...args: unknown[]) => { calls.push(['prune', ...args]); return { prunedNodeCount: 2 }; },
+    archivedTopics: async (...args: unknown[]) => { calls.push(['archived', ...args]); return []; },
+  } as never;
+  const config = { port: 3001, webOrigin: 'http://localhost:3000', aiProvider: 'mock', wsPath: '/ws' };
+  const prune = response();
+  await handleApiRequest(config, request('POST', '/nodes/00000000-0000-4000-8000-000000000003/prune', {}), prune.response, { conversations: service });
+  assert.equal(prune.result().status, 200);
+  const archived = response();
+  await handleApiRequest(config, request('GET', `/workspaces/${workspaceId}/archived-topics`), archived.response, { conversations: service });
+  assert.deepEqual(archived.result().body, { topics: [] });
+  assert.deepEqual(calls, [['prune', '00000000-0000-4000-8000-000000000003'], ['archived', workspaceId]]);
+});

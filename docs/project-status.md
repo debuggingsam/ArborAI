@@ -1,14 +1,26 @@
 # Project status
 
-Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
+Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 19 adds a pure,
+read-only comparison service and workspace comparison endpoint for alternative
+responses, message branches, sibling subtopics, and independent roots. Tickets 17 and 18 add
+context controls, a context-preview drawer, topic movement/archive/restore,
+and soft message-branch pruning to the Vite graph UI and compatible REST
+surface. Ticket 11 adds a pure,
+deterministic Context Engine with topic/message-path isolation, stable context
+exclusions and warnings, capsule/pin selection, cycle detection, and token
+trimming. Ticket 10 adds a
+provider-backed Context Capsule service with bounded runtime validation,
+inherited subtopic capsules, safe post-response updates, and manual retry.
+Ticket 04 adds an
 idempotent legacy-message backfill marker, compact migration capsules,
 validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
 runtime-validated frontend/backend contracts. Ticket 06 adds validated
 workspace/topic graph operations. Ticket 08 adds deterministic mock TreeMaker
 preview routing, decision validation, confidence policy, fallback, and audit
 persistence. Ticket 09 adds the provider abstraction, deterministic mock
-provider, OpenAI adapter, and validated environment selection. The Context
-Engine and generation orchestration remain unimplemented.
+provider, OpenAI adapter, and validated environment selection. Ticket 12 adds
+the read-only Context Preview API. Generation orchestration remains
+unimplemented.
 
 ## Executive summary
 
@@ -32,7 +44,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | API app | TypeScript ESM Node `http` server; Prisma client. Workspace and topic graph REST routes are implemented; no NestJS modules/controllers/gateway. |
 | Shared package | Runtime schemas and inferred types for workspaces, topics/capsules, message nodes, TreeMaker input/decisions, context previews, generation modes/responses, and realtime envelopes/payloads. API and web import its compatibility DTOs and validators. |
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
-| Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
+| Realtime | Node API provides workspace-scoped RFC6455 rooms at `WS_PATH`; the current web client has not yet connected them. |
 | TreeMaker | A pure compact input builder and deterministic mock preview service exist. Preview validates decisions and confidence policy, records a `TreeMakerRun`, and never mutates topics, nodes, or active pointers. |
 | Providers/generation | `MockAiProvider` streams deterministic offline answers and structured outputs; `OpenAiProvider` uses the official server-side SDK for streamed answers and JSON-schema structured outputs. Startup selects `mock` or `openai`; generation orchestration and endpoints remain pending. |
 | Infrastructure | No `docker-compose.yml`, Dockerfiles, or GitHub Actions files. |
@@ -49,7 +61,7 @@ These behaviors are compatible with the target architecture and should be preser
 - Alternative assistant responses can be represented as multiple assistant children of a user node.
 - Nodes have status, token-count, error, soft-prune, and independent context-enabled fields.
 - Topics have context-enabled, archived, active-node, capsule, version, timestamp, and creation-source fields; conversations have an active-topic field.
-- TreeMaker decisions, generation lifecycle metadata, and immutable JSON context snapshots have persistence models, but no TreeMaker, Context Engine, or generation workflow yet uses them.
+- TreeMaker decisions and immutable JSON context snapshots are now used by generation orchestration; generation graph initialization is transactional and provider execution occurs afterward.
 - Normal conversation loading excludes soft-pruned nodes.
 - The seed includes multiple roots, nested subtopics, a linear message thread, alternative assistant responses, disabled topic/message states, a pinned message, a generation snapshot, and a TreeMaker run.
 - The React Flow transformation uses distinct `topicNode` and `messageNode` types and separate topic, ownership, and message edges.
@@ -69,18 +81,23 @@ These behaviors are compatible with the target architecture and should be preser
 
 ### Context and generations
 
-- There is no deterministic Context Engine. `docs/context-rules.md` describes intended behavior, not executable behavior.
-- Topic capsules and immutable generation-context snapshots can be stored as JSON, but no capsule service or Context Engine produces them yet. Raw ancestor transcripts are not copied into nodes.
-- No token-budget mechanism, context-preview endpoint, or stable exclusion/warning codes exists yet.
+- The Context Engine is a pure API-domain service that consumes workspace,
+  topic, and message records. Its read-only context-preview route loads all
+  workspace records so exclusions remain inspectable; generation uses the same
+  engine before persisting its immutable snapshot.
+- Topic capsules are created and updated through a provider-backed service with compact inherited context, runtime validation, deduplication, and non-fatal update failures. Generation orchestration does not yet invoke that service; raw ancestor transcripts are not copied into nodes.
+- The Context Engine has provider-independent token estimation/trimming and
+  stable exclusion/warning codes. Preview is read-only and shares that engine.
 - `StartGenerationRequest` and branch/prune/comparison contracts are partially declared in shared code but have no implemented API route or workflow.
 - TreeMaker preview has deterministic mock routing, structured-output validation, confidence policy, safe fallback, and audit persistence. Applying a placement remains later work.
-- No streamed assistant state transition is exercised despite the existing node status enum.
+- Generation drives pending, streaming, completed, and error states while
+  persisting partial assistant text and final usage.
 
 ### API and realtime
 
-- Workspace aliases and the Ticket 06 topic/message mutation routes are validated. `POST /workspaces/:workspaceId/tree-maker/preview` is implemented; context-preview, generation, prune, and comparison routes remain to be implemented without silently repurposing current public payloads.
-- Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The current API has added the TreeMaker preview route; context-preview and generation routes remain pending.
-- There is no WebSocket implementation yet; the centralized realtime contract remains transport-ready only.
+- Workspace aliases and the Ticket 06 topic/message mutation routes are validated. `POST /workspaces/:workspaceId/tree-maker/preview` and `POST /workspaces/:workspaceId/context-preview` are implemented; generation, prune, and comparison routes remain to be implemented without silently repurposing current public payloads.
+- Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The API includes TreeMaker/context previews and `POST /workspaces/:workspaceId/generations`.
+- WebSocket rooms broadcast generation routing, graph creation, assistant lifecycle, and capsule events; reconnecting clients refetch the graph.
 - `GET /health` only returns `{ "status": "ok" }`; it does not verify database health.
 - `/workspaces` is a product-facing alias for the existing `/conversations` persistence-compatible API. Workspace detail returns `{ workspace, topics, nodes, activeTopicId }`; the legacy route retains `{ conversation, topics, nodes, activeTopicId }`.
 - Topic/node identifiers and topic/update/move/context/pin request bodies are runtime-validated. Topic parent ownership, cycles, archived parents, active topic/node ownership, and node parent ownership are enforced by the service/repository layer.
@@ -194,7 +211,7 @@ This is an audit-driven implementation checklist; ticket names can be aligned wi
 - [x] 05 — Implement and test shared runtime schemas, DTOs, discriminated generation requests, and realtime envelopes.
 - [x] 06 — Implement topic/message graph services: ownership, active IDs, cycle prevention, archive visibility, pin, and move. Pruning remains a later route/workflow.
 - [ ] 07 — Implement deterministic context capsules and safe migration/backfill behavior.
-- [ ] 08 — Implement the independently tested deterministic Context Engine and context-preview API.
+- [x] 08 — Implement the independently tested deterministic Context Engine and context-preview API.
 - [x] 09 — Implement provider abstraction, deterministic mock provider, OpenAI adapter, and validated environment modes.
 - [ ] 10 — Implement TreeMaker input, structured decision validation, confidence policy, and fallbacks.
 - [ ] 11 — Implement transaction-safe generation lifecycle, snapshots, streaming persistence, and capsule updates.

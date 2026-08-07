@@ -4,9 +4,15 @@ import { ConversationRepository } from './repositories/conversation.repository.j
 export class ConversationNotFoundError extends Error {}
 export class TopicValidationError extends Error {}
 
+export type ConversationGraphEvent =
+  | { eventType: 'topic.created' | 'topic.updated' | 'topic.context_updated' | 'topic.archived' | 'topic.restored'; workspaceId: string; topic: ReturnType<ConversationService['toTopic']> }
+  | { eventType: 'topic.moved'; workspaceId: string; topicId: string; parentTopicId: string | null }
+  | { eventType: 'node.context_updated' | 'node.updated'; workspaceId: string; node: ReturnType<ConversationService['toNode']> }
+  | { eventType: 'node.pruned'; workspaceId: string; nodeId: string; prunedNodeIds: string[]; activeNodeId: string | null };
+
 export class ConversationService {
   private readonly repository: ConversationRepository;
-  constructor(db: PrismaClient) { this.repository = new ConversationRepository(db); }
+  constructor(db: PrismaClient, private readonly events?: { publish(event: ConversationGraphEvent): void }) { this.repository = new ConversationRepository(db); }
 
   async list() { return Promise.all((await this.repository.listConversations()).map((conversation) => this.toConversation(conversation)));
   }
@@ -36,12 +42,16 @@ export class ConversationService {
       if (!parent || parent.conversationId !== conversationId) throw new TopicValidationError('Parent topic belongs to another conversation.');
       if (parent.archivedAt) throw new TopicValidationError('Archived topics cannot be parents.');
     }
-    return this.toTopic(await this.repository.createTopic({ conversationId, parentTopicId: data.parentTopicId ?? null, title: data.title.trim(), description: data.description ?? null, createdBy: 'user' }));
+    const created = this.toTopic(await this.repository.createTopic({ conversationId, parentTopicId: data.parentTopicId ?? null, title: data.title.trim(), description: data.description ?? null, createdBy: 'user' }));
+    this.events?.publish({ eventType: 'topic.created', workspaceId: conversationId, topic: created });
+    return created;
   }
   async moveTopic(id: string, parentTopicId: string | null) {
     const topic = await this.requireTopic(id);
     await this.assertValidTopicParent(topic, parentTopicId);
-    return this.toTopic(await this.repository.updateTopic(id, { parentTopicId }));
+    const moved = this.toTopic(await this.repository.updateTopic(id, { parentTopicId }));
+    this.events?.publish({ eventType: 'topic.moved', workspaceId: topic.conversationId, topicId: id, parentTopicId });
+    return moved;
   }
   async setTopicActiveNode(id: string, activeNodeId: string | null) {
     const topic = await this.requireTopic(id);
@@ -53,13 +63,49 @@ export class ConversationService {
     }
     return this.toTopic(await this.repository.updateTopic(id, { activeNodeId }));
   }
-  async updateTopic(id: string, data: { title?: string; description?: string | null }) { try { return this.toTopic(await this.repository.updateTopic(id, { ...data, title: data.title?.trim() })); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
-  async setTopicContext(id: string, enabled: boolean) { try { return this.toTopic(await this.repository.updateTopicContext(id, enabled)); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
-  async setNodeContext(id: string, enabled: boolean) { try { return this.toNode(await this.repository.updateNodeContext(id, enabled)); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Node not found.'); throw error; } }
-  async setNodePinned(id: string, pinned: boolean) { try { return this.toNode(await this.repository.updateNodePin(id, pinned)); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Node not found.'); throw error; } }
+  async updateTopic(id: string, data: { title?: string; description?: string | null }) { try { const updated = this.toTopic(await this.repository.updateTopic(id, { ...data, title: data.title?.trim() })); this.events?.publish({ eventType: 'topic.updated', workspaceId: updated.conversationId, topic: updated }); return updated; } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
+  async setTopicContext(id: string, enabled: boolean) { try { const updated = this.toTopic(await this.repository.updateTopicContext(id, enabled)); this.events?.publish({ eventType: 'topic.context_updated', workspaceId: updated.conversationId, topic: updated }); return updated; } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
+  async setNodeContext(id: string, enabled: boolean) { try { const updated = this.toNode(await this.repository.updateNodeContext(id, enabled)); this.events?.publish({ eventType: 'node.context_updated', workspaceId: updated.conversationId, node: updated }); return updated; } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Node not found.'); throw error; } }
+  async setNodePinned(id: string, pinned: boolean) { try { const updated = this.toNode(await this.repository.updateNodePin(id, pinned)); this.events?.publish({ eventType: 'node.updated', workspaceId: updated.conversationId, node: updated }); return updated; } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Node not found.'); throw error; } }
   async archiveTopic(id: string) { return this.setTopicArchived(id, new Date()); }
   async restoreTopic(id: string) { return this.setTopicArchived(id, null); }
-  private async setTopicArchived(id: string, archivedAt: Date | null) { try { return this.toTopic(await this.repository.updateTopic(id, { archivedAt })); } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
+  private async setTopicArchived(id: string, archivedAt: Date | null) { try { const updated = this.toTopic(await this.repository.updateTopic(id, { archivedAt })); this.events?.publish({ eventType: archivedAt ? 'topic.archived' : 'topic.restored', workspaceId: updated.conversationId, topic: updated }); return updated; } catch (error) { if (this.isNotFound(error)) throw new TopicValidationError('Topic not found.'); throw error; } }
+
+  async archivedTopics(conversationId: string) {
+    const conversation = await this.repository.findConversation(conversationId);
+    if (!conversation) throw new ConversationNotFoundError();
+    const topics = await this.repository.listTopics(conversationId);
+    const byId = new Map(topics.map((topic) => [topic.id, topic]));
+    const archived = (topic: (typeof topics)[number]) => {
+      const seen = new Set<string>(); let current: (typeof topics)[number] | undefined = topic;
+      while (current && !seen.has(current.id)) { if (current.archivedAt) return true; seen.add(current.id); current = current.parentTopicId ? byId.get(current.parentTopicId) : undefined; }
+      return false;
+    };
+    return topics.filter(archived).map((topic) => this.toTopic(topic));
+  }
+
+  async pruneNode(id: string) {
+    const root = await this.repository.findNode(id);
+    if (!root) throw new TopicValidationError('Node not found.');
+    if (root.prunedAt) throw new TopicValidationError('Node is already pruned.');
+    const nodes = await this.repository.listNodes(root.conversationId);
+    const byParent = new Map<string | null, typeof nodes>();
+    for (const node of nodes) { const children = byParent.get(node.parentId) ?? []; children.push(node); byParent.set(node.parentId, children); }
+    const descendants: typeof nodes = []; const queue = [root.id]; const seen = new Set<string>();
+    while (queue.length) { const currentId = queue.shift()!; if (seen.has(currentId)) continue; seen.add(currentId); const current = nodes.find((node) => node.id === currentId); if (!current || current.prunedAt || current.topicId !== root.topicId) continue; descendants.push(current); for (const child of byParent.get(currentId) ?? []) if (child.topicId === root.topicId) queue.push(child.id); }
+    if (descendants.some((node) => node.status === 'pending' || node.status === 'streaming')) throw new TopicValidationError('Streaming or pending message branches cannot be pruned.');
+    await this.repository.updateNodesPruned(descendants.map((node) => node.id), new Date());
+    const topic = await this.requireTopic(root.topicId);
+    let activeNodeId = topic.activeNodeId;
+    if (activeNodeId && descendants.some((node) => node.id === activeNodeId)) {
+      const pruned = new Set(descendants.map((node) => node.id)); let fallback = nodes.find((node) => node.id === activeNodeId);
+      while (fallback && pruned.has(fallback.id)) fallback = fallback.parentId ? nodes.find((node) => node.id === fallback!.parentId) : undefined;
+      activeNodeId = fallback?.id ?? null;
+      await this.repository.updateTopic(topic.id, { activeNodeId });
+    }
+    this.events?.publish({ eventType: 'node.pruned', workspaceId: root.conversationId, nodeId: root.id, prunedNodeIds: descendants.map((node) => node.id), activeNodeId });
+    return { conversationId: root.conversationId, prunedNodeId: root.id, prunedNodeCount: descendants.length, activeNodeId };
+  }
 
   async update(id: string, data: { title?: string; systemPrompt?: string; activeTopicId?: string | null }) {
     if (data.activeTopicId) {
