@@ -8,6 +8,9 @@ import {
   type TreeMakerPreviewResponse,
 } from '@arborai/shared';
 import { buildTreeMakerInput, type TreeMakerInputNode, type TreeMakerInputTopic } from './tree-maker-input.service.js';
+import type { AiProvider } from './ai-provider.js';
+import { MockAiProvider } from './mock-ai-provider.js';
+import { treeMakerDecisionJsonSchema, treeMakerSystemPrompt } from './tree-maker-prompt.js';
 
 export type TreeMakerTopicRecord = TreeMakerInputTopic & { activeNodeId: string | null };
 export type TreeMakerNodeRecord = TreeMakerInputNode & { parentId: string | null; contextEnabled: boolean };
@@ -15,6 +18,15 @@ export type TreeMakerWorkspaceRecord = { id: string; title: string; activeTopicI
 
 export interface TreeMaker {
   decide(input: TreeMakerInput): Promise<unknown>;
+}
+
+/** Provider-backed TreeMaker port. It only obtains a placement proposal. */
+export class ProviderTreeMaker implements TreeMaker {
+  constructor(private readonly provider: AiProvider, private readonly model: string) {}
+
+  decide(input: TreeMakerInput): Promise<unknown> {
+    return this.provider.createStructuredOutput({ model: this.model, systemPrompt: treeMakerSystemPrompt, payload: input, schema: TreeMakerDecisionSchema, schemaName: 'tree_maker_decision', jsonSchema: treeMakerDecisionJsonSchema });
+  }
 }
 
 export interface TreeMakerStore {
@@ -71,7 +83,7 @@ export class MockTreeMaker implements TreeMaker {
 export class TreeMakerApplicationService {
   constructor(
     private readonly store: TreeMakerStore,
-    private readonly treeMaker: TreeMaker = new MockTreeMaker(),
+    private readonly treeMaker: TreeMaker = new ProviderTreeMaker(new MockAiProvider(), 'mock-tree-maker'),
     private readonly provider = 'mock',
     private readonly model = 'mock-tree-maker',
     private readonly policy = defaultTreeMakerConfidencePolicy,

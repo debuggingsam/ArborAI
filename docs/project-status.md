@@ -6,8 +6,9 @@ validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
 runtime-validated frontend/backend contracts. Ticket 06 adds validated
 workspace/topic graph operations. Ticket 08 adds deterministic mock TreeMaker
 preview routing, decision validation, confidence policy, fallback, and audit
-persistence. The Context Engine, answering provider, and generation
-orchestration remain unimplemented.
+persistence. Ticket 09 adds the provider abstraction, deterministic mock
+provider, OpenAI adapter, and validated environment selection. The Context
+Engine and generation orchestration remain unimplemented.
 
 ## Executive summary
 
@@ -33,7 +34,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
 | TreeMaker | A pure compact input builder and deterministic mock preview service exist. Preview validates decisions and confidence policy, records a `TreeMakerRun`, and never mutates topics, nodes, or active pointers. |
-| Providers/generation | Mock-only configuration validation exists, but no provider adapter, context assembly, generation endpoint, streaming, or persistence. |
+| Providers/generation | `MockAiProvider` streams deterministic offline answers and structured outputs; `OpenAiProvider` uses the official server-side SDK for streamed answers and JSON-schema structured outputs. Startup selects `mock` or `openai`; generation orchestration and endpoints remain pending. |
 | Infrastructure | No `docker-compose.yml`, Dockerfiles, or GitHub Actions files. |
 
 ## Compatible functionality to retain
@@ -53,7 +54,7 @@ These behaviors are compatible with the target architecture and should be preser
 - The seed includes multiple roots, nested subtopics, a linear message thread, alternative assistant responses, disabled topic/message states, a pinned message, a generation snapshot, and a TreeMaker run.
 - The React Flow transformation uses distinct `topicNode` and `messageNode` types and separate topic, ownership, and message edges.
 - The root quality-command helper and dependency-free shared contracts are suitable foundations.
-- `AI_PROVIDER=mock` is required by current API configuration and requires no credential.
+- `AI_PROVIDER=mock` requires no credential. `AI_PROVIDER=openai` validates the server-only key and all three model names at startup.
 
 ## Functionality requiring modification or extension
 
@@ -194,7 +195,7 @@ This is an audit-driven implementation checklist; ticket names can be aligned wi
 - [x] 06 — Implement topic/message graph services: ownership, active IDs, cycle prevention, archive visibility, pin, and move. Pruning remains a later route/workflow.
 - [ ] 07 — Implement deterministic context capsules and safe migration/backfill behavior.
 - [ ] 08 — Implement the independently tested deterministic Context Engine and context-preview API.
-- [ ] 09 — Implement provider abstraction, deterministic mock provider, and validated environment modes.
+- [x] 09 — Implement provider abstraction, deterministic mock provider, OpenAI adapter, and validated environment modes.
 - [ ] 10 — Implement TreeMaker input, structured decision validation, confidence policy, and fallbacks.
 - [ ] 11 — Implement transaction-safe generation lifecycle, snapshots, streaming persistence, and capsule updates.
 - [ ] 12 — Implement WebSocket gateway, centralized events, reconnection/deduplication behavior, and tests.

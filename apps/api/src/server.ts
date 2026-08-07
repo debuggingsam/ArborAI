@@ -5,7 +5,8 @@ import { ConversationService, ConversationNotFoundError, TopicValidationError } 
 import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateUpdateTopicRequest, validateMoveTopicRequest, validateContextRequest, validatePinRequest, TreeMakerPreviewRequestSchema } from '@arborai/shared';
 import { ConversationRepository } from './repositories/conversation.repository.js';
 import { PrismaTreeMakerStore } from './tree-maker.repository.js';
-import { TreeMakerApplicationService, TreeMakerWorkspaceNotFoundError } from './tree-maker.service.js';
+import { ProviderTreeMaker, TreeMakerApplicationService, TreeMakerWorkspaceNotFoundError } from './tree-maker.service.js';
+import { createAiProvider } from './ai-provider.factory.js';
 
 type Dependencies = { conversations: ConversationService; treeMaker?: TreeMakerApplicationService };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -108,7 +109,9 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
 export function createApiServer(config = getConfig()) {
   const db = new PrismaClient();
   const repository = new ConversationRepository(db);
-  const dependencies = { conversations: new ConversationService(db), treeMaker: new TreeMakerApplicationService(new PrismaTreeMakerStore(repository), undefined, config.aiProvider) };
+  const provider = createAiProvider(config);
+  const treeMakerModel = config.treeMakerModel ?? 'mock-tree-maker';
+  const dependencies = { conversations: new ConversationService(db), treeMaker: new TreeMakerApplicationService(new PrismaTreeMakerStore(repository), new ProviderTreeMaker(provider, treeMakerModel), provider.name, treeMakerModel, { high: config.treeMakerHighConfidence ?? 0.85, medium: config.treeMakerLowConfidence ?? 0.55 }) };
   return createServer((request, response) => { void handleApiRequest(config, request, response, dependencies); });
 }
 

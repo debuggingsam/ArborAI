@@ -45,9 +45,10 @@ dependency on HTTP, React, WebSockets, or provider SDK types.
 - **Generation service:** validates lifecycle transitions, persists a snapshot
   before streaming, invokes the provider, persists deltas/final usage, and
   updates capsules after success.
-- **Provider abstraction:** exposes structured output and streamed answering;
-  mock mode is offline and deterministic, while real-provider credentials stay
-  backend-only.
+- **Provider abstraction:** exposes structured output and streamed answering.
+  `MockAiProvider` is offline and deterministic; `OpenAiProvider` uses the
+  server-side OpenAI Responses SDK with native JSON-schema outputs. Provider
+  SDK types and credentials remain inside API adapters.
 
 ## Topic and message hierarchy
 
