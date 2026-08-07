@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, TreeMakerInputSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
+import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, TreeMakerInputSchema, TreeMakerPreviewRequestSchema, TreeMakerPreviewResponseSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
 
 test('exports stable node and WebSocket contract values', () => {
   assert.equal(NodeRole.Assistant, 'assistant');
@@ -44,6 +44,13 @@ test('validates the TreeMaker decision union at runtime', () => {
   const valid = TreeMakerDecisionSchema.safeParse({ action: 'continue_topic', topicId: 'topic', anchorNodeId: 'node', confidence: 0.9, reasoning: 'Direct follow-up' });
   assert.equal(valid.success, true);
   assert.equal(TreeMakerDecisionSchema.safeParse({ action: 'continue_topic', topicId: 'topic', confidence: 1.4, reasoning: 'Bad confidence' }).success, false);
+});
+
+test('validates TreeMaker preview request and response contracts', () => {
+  const decision = { action: 'create_root_topic', title: 'Deployment', description: null, provisionalCapsule: null, confidence: 0.9, reasoning: 'Independent subject' };
+  assert.equal(TreeMakerPreviewRequestSchema.safeParse({ prompt: 'Deploy this', activeTopicId: null, activeNodeId: null }).success, true);
+  assert.equal(TreeMakerPreviewRequestSchema.safeParse({ prompt: '', activeTopicId: null, activeNodeId: null }).success, false);
+  assert.equal(TreeMakerPreviewResponseSchema.safeParse({ decision, requiresConfirmation: false }).success, true);
 });
 
 test('validates the bounded TreeMaker input index without transcript fields', () => {

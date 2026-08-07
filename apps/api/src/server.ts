@@ -2,9 +2,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { PrismaClient } from '@prisma/client';
 import { getConfig, type ApiConfig } from './config.js';
 import { ConversationService, ConversationNotFoundError, TopicValidationError } from './conversations.service.js';
-import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateUpdateTopicRequest, validateMoveTopicRequest, validateContextRequest, validatePinRequest } from '@arborai/shared';
+import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateUpdateTopicRequest, validateMoveTopicRequest, validateContextRequest, validatePinRequest, TreeMakerPreviewRequestSchema } from '@arborai/shared';
+import { ConversationRepository } from './repositories/conversation.repository.js';
+import { PrismaTreeMakerStore } from './tree-maker.repository.js';
+import { TreeMakerApplicationService, TreeMakerWorkspaceNotFoundError } from './tree-maker.service.js';
 
-type Dependencies = { conversations: ConversationService };
+type Dependencies = { conversations: ConversationService; treeMaker?: TreeMakerApplicationService };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const json = (response: ServerResponse, status: number, body: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(body)); };
 const errorBody = (code: string, message: string, details?: string[]) => ({ error: { code, message, ...(details ? { details } : {}) } });
@@ -38,6 +41,7 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
   const collection = path === '/conversations' || path === '/workspaces';
   const member = path.match(/^\/(conversations|workspaces)\/([^/]+)$/);
   const topicCollection = path.match(/^\/(?:conversations|workspaces)\/([^/]+)\/topics$/);
+  const treeMakerPreview = path.match(/^\/workspaces\/([^/]+)\/tree-maker\/preview$/);
   const topicMember = path.match(/^\/topics\/([^/]+)(?:\/(move|context|archive|restore))?$/);
   const nodeMember = path.match(/^\/nodes\/([^/]+)\/(context|pin)$/);
   try {
@@ -63,6 +67,13 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
       }
       if (request.method === 'DELETE') { await dependencies.conversations.delete(id); response.writeHead(204); response.end(); return; }
     }
+    if (treeMakerPreview && request.method === 'POST') {
+      if (!uuidPattern.test(treeMakerPreview[1])) { json(response, 400, errorBody('invalid_id', 'workspaceId must be a valid UUID.')); return; }
+      if (!dependencies.treeMaker) { json(response, 500, errorBody('configuration_error', 'TreeMaker service is not configured.')); return; }
+      const validation = TreeMakerPreviewRequestSchema.safeParse(await readBody(request));
+      if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid TreeMaker preview payload.', validation.errors)); return; }
+      json(response, 200, await dependencies.treeMaker.preview(treeMakerPreview[1], validation.data)); return;
+    }
     if (topicCollection && request.method === 'POST') {
       if (!uuidPattern.test(topicCollection[1])) { json(response, 400, errorBody('invalid_id', 'workspaceId must be a valid UUID.')); return; }
       const body = await readBody(request); const validation = validateCreateTopicRequest(body);
@@ -87,6 +98,7 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
     json(response, 405, errorBody('method_not_allowed', 'Method not allowed.'));
   } catch (error) {
     if (error instanceof ConversationNotFoundError) { json(response, 404, errorBody('conversation_not_found', 'Conversation not found.')); return; }
+    if (error instanceof TreeMakerWorkspaceNotFoundError) { json(response, 404, errorBody('workspace_not_found', 'Workspace not found.')); return; }
     if (error instanceof TopicValidationError) { json(response, 400, errorBody('topic_validation_error', error.message)); return; }
     if (error instanceof Error && error.message === 'invalid_json') { json(response, 400, errorBody('invalid_json', 'Request body must be valid JSON.')); return; }
     json(response, 500, errorBody('internal_error', 'An unexpected error occurred.'));
@@ -95,7 +107,8 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
 
 export function createApiServer(config = getConfig()) {
   const db = new PrismaClient();
-  const dependencies = { conversations: new ConversationService(db) };
+  const repository = new ConversationRepository(db);
+  const dependencies = { conversations: new ConversationService(db), treeMaker: new TreeMakerApplicationService(new PrismaTreeMakerStore(repository), undefined, config.aiProvider) };
   return createServer((request, response) => { void handleApiRequest(config, request, response, dependencies); });
 }
 

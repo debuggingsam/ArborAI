@@ -48,8 +48,10 @@ and archived parents unless explicitly supported.
 ## Preview contracts
 
 TreeMaker preview accepts `{ prompt, activeTopicId, activeNodeId }` and returns
-`{ decision, requiresConfirmation }`; it never mutates the graph. A decision is
-one of `continue_topic`, `create_subtopic`, `create_root_topic`, or `ask_user`.
+`{ decision, requiresConfirmation }`; it never mutates the graph. It does
+persist one `TreeMakerRun` audit record for every validated decision or safe
+fallback. A decision is one of `continue_topic`, `create_subtopic`,
+`create_root_topic`, or `ask_user`.
 
 Context preview accepts `{ topicId, anchorNodeId, newPrompt, maxInputTokens }`
 and returns the exact Context Engine result: serialized messages, included and

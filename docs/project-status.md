@@ -4,8 +4,9 @@ Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
 idempotent legacy-message backfill marker, compact migration capsules,
 validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
 runtime-validated frontend/backend contracts. Ticket 06 adds validated
-workspace/topic graph operations. The compact TreeMaker input-index builder is
-implemented; TreeMaker decisions, Context Engine, provider, and generation
+workspace/topic graph operations. Ticket 08 adds deterministic mock TreeMaker
+preview routing, decision validation, confidence policy, fallback, and audit
+persistence. The Context Engine, answering provider, and generation
 orchestration remain unimplemented.
 
 ## Executive summary
@@ -17,7 +18,7 @@ The repository is an npm multi-package repository (not an npm-workspaces monorep
 - `packages/shared` is a dependency-free TypeScript contracts package.
 - PostgreSQL is the configured datastore; five Prisma SQL migrations define conversations, topics/capsules, message nodes, TreeMaker runs, generations, immutable context snapshots, and legacy-backfill support.
 
-The codebase has already completed part of the topic-domain migration: a topic has a distinct hierarchy from a message node, message nodes reference a topic, and the web graph renders topic and message nodes differently. It has not implemented the TreeMaker, context-capsule, deterministic context-engine, generation, provider, realtime, correction, or end-to-end workflow required by the refactor specification.
+The codebase has already completed part of the topic-domain migration: a topic has a distinct hierarchy from a message node, message nodes reference a topic, and the web graph renders topic and message nodes differently. TreeMaker preview routing is implemented, but applying placements, context capsules, the deterministic Context Engine, generation, answering providers, realtime, correction, and the end-to-end workflow remain unimplemented.
 
 The existing root quality commands pass. There is no Docker Compose configuration, GitHub Actions workflow, or browser/integration-test setup. The current root `dev` command starts the Vite app and API processes. It was attempted during this audit but the sandbox denied Vite binding `0.0.0.0:5173` with `EPERM`; this is an environment restriction, not evidence of an application compile failure.
 
@@ -31,7 +32,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | Shared package | Runtime schemas and inferred types for workspaces, topics/capsules, message nodes, TreeMaker input/decisions, context previews, generation modes/responses, and realtime envelopes/payloads. API and web import its compatibility DTOs and validators. |
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
-| TreeMaker | A pure, runtime-validated compact input builder exists; decision execution, validation policy, and persistence orchestration do not. |
+| TreeMaker | A pure compact input builder and deterministic mock preview service exist. Preview validates decisions and confidence policy, records a `TreeMakerRun`, and never mutates topics, nodes, or active pointers. |
 | Providers/generation | Mock-only configuration validation exists, but no provider adapter, context assembly, generation endpoint, streaming, or persistence. |
 | Infrastructure | No `docker-compose.yml`, Dockerfiles, or GitHub Actions files. |
 
@@ -71,13 +72,13 @@ These behaviors are compatible with the target architecture and should be preser
 - Topic capsules and immutable generation-context snapshots can be stored as JSON, but no capsule service or Context Engine produces them yet. Raw ancestor transcripts are not copied into nodes.
 - No token-budget mechanism, context-preview endpoint, or stable exclusion/warning codes exists yet.
 - `StartGenerationRequest` and branch/prune/comparison contracts are partially declared in shared code but have no implemented API route or workflow.
-- No TreeMaker routing, confidence policy, fallback, structured-output validation, or mock-provider behavior is implemented.
+- TreeMaker preview has deterministic mock routing, structured-output validation, confidence policy, safe fallback, and audit persistence. Applying a placement remains later work.
 - No streamed assistant state transition is exercised despite the existing node status enum.
 
 ### API and realtime
 
-- Workspace aliases and the Ticket 06 topic/message mutation routes are validated. TreeMaker, context-preview, generation, prune, and comparison routes remain to be implemented without silently repurposing current public payloads.
-- Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The current API has not yet added the target TreeMaker, context-preview, or generation routes that will consume the newer validators.
+- Workspace aliases and the Ticket 06 topic/message mutation routes are validated. `POST /workspaces/:workspaceId/tree-maker/preview` is implemented; context-preview, generation, prune, and comparison routes remain to be implemented without silently repurposing current public payloads.
+- Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The current API has added the TreeMaker preview route; context-preview and generation routes remain pending.
 - There is no WebSocket implementation yet; the centralized realtime contract remains transport-ready only.
 - `GET /health` only returns `{ "status": "ok" }`; it does not verify database health.
 - `/workspaces` is a product-facing alias for the existing `/conversations` persistence-compatible API. Workspace detail returns `{ workspace, topics, nodes, activeTopicId }`; the legacy route retains `{ conversation, topics, nodes, activeTopicId }`.

@@ -48,3 +48,16 @@ test('workspace graph response uses workspace terminology', async () => {
   );
   assert.deepEqual(result.result(), { status: 200, body: { workspace: { id: workspaceId }, topics: [], nodes: [], activeTopicId: null } });
 });
+
+test('TreeMaker preview dispatches without graph mutations', async () => {
+  const calls: unknown[] = [];
+  const result = response();
+  await handleApiRequest(
+    { port: 3001, webOrigin: 'http://localhost:3000', aiProvider: 'mock', wsPath: '/ws' },
+    request('POST', `/workspaces/${workspaceId}/tree-maker/preview`, { prompt: 'Follow up', activeTopicId: null, activeNodeId: null }),
+    result.response,
+    { conversations: {} as never, treeMaker: { preview: async (...args: unknown[]) => { calls.push(args); return { decision: { action: 'ask_user' }, requiresConfirmation: true }; } } as never },
+  );
+  assert.equal(result.result().status, 200);
+  assert.deepEqual(calls, [[workspaceId, { prompt: 'Follow up', activeTopicId: null, activeNodeId: null }]]);
+});

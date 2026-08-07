@@ -100,6 +100,13 @@ export const TreeMakerDecisionSchema: RuntimeSchema<TreeMakerDecision> = schema(
   return result(value, [...base, ['question must be a non-empty string', nonEmpty(value.question)], ['suggestedTopicIds must be an array of IDs', stringArray(value.suggestedTopicIds)]]);
 });
 
+type TreeMakerPreviewRequestShape = { prompt: string; activeTopicId: string | null; activeNodeId: string | null };
+export const TreeMakerPreviewRequestSchema: RuntimeSchema<TreeMakerPreviewRequestShape> = schema((value) => !record(value) ? { success: false, errors: ['TreeMaker preview request must be an object'] } : result(value, [['prompt must be a non-empty string', nonEmpty(value.prompt)], ['activeTopicId must be a string or null', nullableString(value.activeTopicId)], ['activeNodeId must be a string or null', nullableString(value.activeNodeId)]]));
+export type TreeMakerPreviewRequest = InferSchema<typeof TreeMakerPreviewRequestSchema>;
+type TreeMakerPreviewResponseShape = { decision: TreeMakerDecision; requiresConfirmation: boolean };
+export const TreeMakerPreviewResponseSchema: RuntimeSchema<TreeMakerPreviewResponseShape> = schema((value) => !record(value) ? { success: false, errors: ['TreeMaker preview response must be an object'] } : result(value, [['decision must be valid', TreeMakerDecisionSchema.safeParse(value.decision).success], ['requiresConfirmation must be a boolean', typeof value.requiresConfirmation === 'boolean']]));
+export type TreeMakerPreviewResponse = InferSchema<typeof TreeMakerPreviewResponseSchema>;
+
 type ContextExclusionShape = { targetType: 'topic' | 'node'; targetId: string; reason: ContextExclusionReason };
 export const ContextExclusionSchema: RuntimeSchema<ContextExclusionShape> = schema((value) => !record(value) ? { success: false, errors: ['context exclusion must be an object'] } : result(value, [['targetType must be topic or node', value.targetType === 'topic' || value.targetType === 'node'], ['targetId must be a non-empty string', nonEmpty(value.targetId)], ['reason must be valid', Object.values(ContextExclusionReason).includes(value.reason as ContextExclusionReason)]]));
 export type ContextExclusion = InferSchema<typeof ContextExclusionSchema>;
