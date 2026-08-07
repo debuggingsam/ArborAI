@@ -4,8 +4,9 @@ Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
 idempotent legacy-message backfill marker, compact migration capsules,
 validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
 runtime-validated frontend/backend contracts. Ticket 06 adds validated
-workspace/topic graph operations. TreeMaker, Context Engine, provider, and
-generation orchestration remain unimplemented.
+workspace/topic graph operations. The compact TreeMaker input-index builder is
+implemented; TreeMaker decisions, Context Engine, provider, and generation
+orchestration remain unimplemented.
 
 ## Executive summary
 
@@ -30,6 +31,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | Shared package | Runtime schemas and inferred types for workspaces, topics/capsules, message nodes, TreeMaker input/decisions, context previews, generation modes/responses, and realtime envelopes/payloads. API and web import its compatibility DTOs and validators. |
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
+| TreeMaker | A pure, runtime-validated compact input builder exists; decision execution, validation policy, and persistence orchestration do not. |
 | Providers/generation | Mock-only configuration validation exists, but no provider adapter, context assembly, generation endpoint, streaming, or persistence. |
 | Infrastructure | No `docker-compose.yml`, Dockerfiles, or GitHub Actions files. |
 

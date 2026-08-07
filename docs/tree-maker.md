@@ -11,6 +11,22 @@ topic/node, visible topic IDs/parents/titles/descriptions/capsule summaries,
 recent activity, context/archive state, bounded recent message previews, and
 the new prompt. It must not receive every raw message in the workspace.
 
+## Input-index builder
+
+The API's pure `tree-maker-input.service` builds this index from workspace,
+topic, and message records. It has no Prisma, HTTP, provider, or Context Engine
+dependency. Its defaults are 50 topics, three recent user/assistant previews
+per included topic, and 500 characters per preview/text field. Text is
+truncated deterministically with a trailing ellipsis.
+
+Archived topics (and their descendants) are omitted by default. Context-disabled
+topics (and descendants whose context is effectively disabled) are also omitted
+from routing candidates by default; a caller may explicitly enable their
+inclusion for a product setting. Pruned and system messages are not previews.
+Selected topics are ordered deterministically, with parents before children;
+the maximum-topic limit is applied after that ordering. The index contains only
+bounded previews, never a workspace-wide raw transcript.
+
 It returns exactly one validated action:
 
 - `continue_topic(topicId, anchorNodeId)` for a direct follow-up or coherent

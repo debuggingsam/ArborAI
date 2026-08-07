@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
+import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, TreeMakerInputSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
 
 test('exports stable node and WebSocket contract values', () => {
   assert.equal(NodeRole.Assistant, 'assistant');
@@ -44,6 +44,16 @@ test('validates the TreeMaker decision union at runtime', () => {
   const valid = TreeMakerDecisionSchema.safeParse({ action: 'continue_topic', topicId: 'topic', anchorNodeId: 'node', confidence: 0.9, reasoning: 'Direct follow-up' });
   assert.equal(valid.success, true);
   assert.equal(TreeMakerDecisionSchema.safeParse({ action: 'continue_topic', topicId: 'topic', confidence: 1.4, reasoning: 'Bad confidence' }).success, false);
+});
+
+test('validates the bounded TreeMaker input index without transcript fields', () => {
+  const input = {
+    workspace: { id: 'workspace', title: 'Planning' }, activeTopicId: 'topic', activeNodeId: 'node', newPrompt: 'Follow up',
+    topics: [{ id: 'topic', parentTopicId: null, title: 'Topic', description: null, capsuleSummary: null, recentActivity: null, contextEnabled: true, archived: false, childTopicCount: 0, messageCount: 1 }],
+    recentMessagesByTopic: { topic: [{ id: 'node', role: 'user', contentPreview: 'Short preview' }] },
+  };
+  assert.equal(TreeMakerInputSchema.safeParse(input).success, true);
+  assert.equal(TreeMakerInputSchema.safeParse({ ...input, topics: [{ ...input.topics[0], childTopicCount: -1 }] }).success, false);
 });
 
 test('validates context previews and rejects malformed realtime envelopes', () => {
