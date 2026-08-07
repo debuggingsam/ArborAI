@@ -14,6 +14,13 @@ test('active node queries exclude pruned nodes', async () => {
   assert.deepEqual(query, { where: { conversationId: 'conversation', prunedAt: null }, orderBy: { createdAt: 'asc' } });
 });
 
+test('updates a node pin independently from its context state', async () => {
+  let data: unknown;
+  const db = { conversationNode: { update: async ({ data: update }: { data: unknown }) => { data = update; return {}; } } } as never;
+  await new ConversationRepository(db).updateNodePin('node', true);
+  assert.deepEqual(data, { pinned: true });
+});
+
 test('rejects a node whose topic belongs to another conversation', async () => {
   const db = {
     conversationNode: { create: async () => undefined },

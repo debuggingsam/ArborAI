@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { PrismaClient } from '@prisma/client';
 import { getConfig, type ApiConfig } from './config.js';
 import { ConversationService, ConversationNotFoundError, TopicValidationError } from './conversations.service.js';
-import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateContextRequest } from '@arborai/shared';
+import { validateCreateConversationRequest, validateUpdateConversationRequest, validateCreateTopicRequest, validateUpdateTopicRequest, validateMoveTopicRequest, validateContextRequest, validatePinRequest } from '@arborai/shared';
 
 type Dependencies = { conversations: ConversationService };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -16,7 +16,12 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
   try { return JSON.parse(body); } catch { throw new Error('invalid_json'); }
 }
 
-function idFrom(path: string) { return path.slice('/conversations/'.length); }
+const workspaceGraph = (graph: Awaited<ReturnType<ConversationService['get']>>) => ({
+  workspace: graph.conversation,
+  topics: graph.topics,
+  nodes: graph.nodes,
+  activeTopicId: graph.activeTopicId,
+});
 
 export async function handleApiRequest(config: ApiConfig, request: IncomingMessage, response: ServerResponse, dependencies?: Dependencies): Promise<void> {
   response.setHeader('Access-Control-Allow-Origin', config.webOrigin);
@@ -30,12 +35,11 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
   }
   if (!dependencies) { json(response, 500, errorBody('configuration_error', 'Conversation service is not configured.')); return; }
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-  const collection = path === '/conversations';
-  const member = path.startsWith('/conversations/') && path.split('/').length === 3;
-  const topicCollection = path.match(/^\/conversations\/([^/]+)\/topics$/);
-  const topicMember = path.match(/^\/topics\/([^/]+)(?:\/(context|archive|restore))?$/);
-  const nodeContext = path.match(/^\/nodes\/([^/]+)\/context$/);
-  if (!collection && !member) { json(response, 404, errorBody('not_found', 'Route not found.')); return; }
+  const collection = path === '/conversations' || path === '/workspaces';
+  const member = path.match(/^\/(conversations|workspaces)\/([^/]+)$/);
+  const topicCollection = path.match(/^\/(?:conversations|workspaces)\/([^/]+)\/topics$/);
+  const topicMember = path.match(/^\/topics\/([^/]+)(?:\/(move|context|archive|restore))?$/);
+  const nodeMember = path.match(/^\/nodes\/([^/]+)\/(context|pin)$/);
   try {
     if (collection && request.method === 'GET') { json(response, 200, await dependencies.conversations.list()); return; }
     if (collection && request.method === 'POST') {
@@ -44,9 +48,14 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
       json(response, 201, await dependencies.conversations.create(validation.data)); return;
     }
     if (member) {
-      const id = idFrom(path);
-      if (!uuidPattern.test(id)) { json(response, 400, errorBody('invalid_id', 'conversationId must be a valid UUID.')); return; }
-      if (request.method === 'GET') { json(response, 200, await dependencies.conversations.get(id)); return; }
+      const [, resource, id] = member;
+      const workspaceRoute = resource === 'workspaces';
+      if (!uuidPattern.test(id)) { json(response, 400, errorBody('invalid_id', `${workspaceRoute ? 'workspaceId' : 'conversationId'} must be a valid UUID.`)); return; }
+      if (request.method === 'GET') {
+        const graph = await dependencies.conversations.get(id);
+        json(response, 200, workspaceRoute ? workspaceGraph(graph) : graph);
+        return;
+      }
       if (request.method === 'PATCH') {
         const body = await readBody(request); const validation = validateUpdateConversationRequest(body);
         if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid conversation payload.', validation.errors)); return; }
@@ -55,18 +64,26 @@ export async function handleApiRequest(config: ApiConfig, request: IncomingMessa
       if (request.method === 'DELETE') { await dependencies.conversations.delete(id); response.writeHead(204); response.end(); return; }
     }
     if (topicCollection && request.method === 'POST') {
+      if (!uuidPattern.test(topicCollection[1])) { json(response, 400, errorBody('invalid_id', 'workspaceId must be a valid UUID.')); return; }
       const body = await readBody(request); const validation = validateCreateTopicRequest(body);
       if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid topic payload.', validation.errors)); return; }
       json(response, 201, await dependencies.conversations.createTopic(topicCollection[1], validation.data)); return;
     }
     if (topicMember) {
       const id = topicMember[1]; const action = topicMember[2];
+      if (!uuidPattern.test(id)) { json(response, 400, errorBody('invalid_id', 'topicId must be a valid UUID.')); return; }
+      if (action === 'move' && request.method === 'POST') { const validation = validateMoveTopicRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid move payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.moveTopic(id, validation.data.parentTopicId)); return; }
       if (action === 'archive' && request.method === 'POST') { json(response, 200, await dependencies.conversations.archiveTopic(id)); return; }
       if (action === 'restore' && request.method === 'POST') { json(response, 200, await dependencies.conversations.restoreTopic(id)); return; }
       if (action === 'context' && request.method === 'PATCH') { const validation = validateContextRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid context payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setTopicContext(id, validation.data.contextEnabled)); return; }
-      if (!action && request.method === 'PATCH') { const body = await readBody(request) as { title?: string; description?: string | null }; json(response, 200, await dependencies.conversations.updateTopic(id, body)); return; }
+      if (!action && request.method === 'PATCH') { const validation = validateUpdateTopicRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid topic payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.updateTopic(id, validation.data)); return; }
     }
-    if (nodeContext && request.method === 'PATCH') { const validation = validateContextRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid context payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setNodeContext(nodeContext[1], validation.data.contextEnabled)); return; }
+    if (nodeMember && request.method === 'PATCH') {
+      const id = nodeMember[1]; const action = nodeMember[2];
+      if (!uuidPattern.test(id)) { json(response, 400, errorBody('invalid_id', 'nodeId must be a valid UUID.')); return; }
+      if (action === 'context') { const validation = validateContextRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid context payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setNodeContext(id, validation.data.contextEnabled)); return; }
+      if (action === 'pin') { const validation = validatePinRequest(await readBody(request)); if (!validation.success) { json(response, 400, errorBody('validation_error', 'Invalid pin payload.', validation.errors)); return; } json(response, 200, await dependencies.conversations.setNodePinned(id, validation.data.pinned)); return; }
+    }
     json(response, 405, errorBody('method_not_allowed', 'Method not allowed.'));
   } catch (error) {
     if (error instanceof ConversationNotFoundError) { json(response, 404, errorBody('conversation_not_found', 'Conversation not found.')); return; }

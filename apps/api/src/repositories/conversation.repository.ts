@@ -64,6 +64,7 @@ export class ConversationRepository {
     return this.db.generationContextSnapshot.findUnique({ where: { generationId } });
   }
   updateNodeContext(id: string, contextEnabled: boolean) { return this.db.conversationNode.update({ where: { id }, data: { contextEnabled } }); }
+  updateNodePin(id: string, pinned: boolean) { return this.db.conversationNode.update({ where: { id }, data: { pinned } }); }
   updateTopicContext(id: string, contextEnabled: boolean) { return this.db.topic.update({ where: { id }, data: { contextEnabled } }); }
 
   updateConversation(id: string, data: Prisma.ConversationUpdateInput) { return this.db.conversation.update({ where: { id }, data }); }

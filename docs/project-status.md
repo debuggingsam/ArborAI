@@ -3,8 +3,9 @@
 Audited on 2026-08-06 against `docs/refactor-spec.md`. Ticket 04 adds an
 idempotent legacy-message backfill marker, compact migration capsules,
 validation reporting, and a comprehensive graph seed. Ticket 05 centralizes
-runtime-validated frontend/backend contracts. Neither ticket adds TreeMaker,
-Context Engine, provider, or generation orchestration.
+runtime-validated frontend/backend contracts. Ticket 06 adds validated
+workspace/topic graph operations. TreeMaker, Context Engine, provider, and
+generation orchestration remain unimplemented.
 
 ## Executive summary
 
@@ -25,7 +26,7 @@ The existing root quality commands pass. There is no Docker Compose configuratio
 | --- | --- |
 | Package manager | npm, with a root helper (`scripts/run-workspaces.mjs`) that runs scripts in `apps/web`, `apps/api`, and `packages/shared`. The root `package.json` does **not** declare `workspaces`. |
 | Web app | Vite, React, React Flow, TypeScript. The Vite entry is `src/main.tsx`; `src/server.ts` and its browser client are legacy/unreferenced by Vite. |
-| API app | TypeScript ESM Node `http` server; Prisma client. No NestJS modules/controllers/gateway. |
+| API app | TypeScript ESM Node `http` server; Prisma client. Workspace and topic graph REST routes are implemented; no NestJS modules/controllers/gateway. |
 | Shared package | Runtime schemas and inferred types for workspaces, topics/capsules, message nodes, TreeMaker input/decisions, context previews, generation modes/responses, and realtime envelopes/payloads. API and web import its compatibility DTOs and validators. |
 | Persistence | Prisma/PostgreSQL schema and four committed SQL migrations. Topics are first-class; TreeMaker runs, generations, and immutable context snapshots are persisted. |
 | Realtime | No WebSocket server or client connection. `WS_PATH` and event constants are unused by a transport. |
@@ -73,13 +74,13 @@ These behaviors are compatible with the target architecture and should be preser
 
 ### API and realtime
 
-- The API must gain validated workspace/topic/message/generation operations described in the specification, without silently repurposing current public payloads.
+- Workspace aliases and the Ticket 06 topic/message mutation routes are validated. TreeMaker, context-preview, generation, prune, and comparison routes remain to be implemented without silently repurposing current public payloads.
 - Shared DTOs, discriminated unions, runtime validators, and centralized realtime names/envelopes are in `packages/shared`. The current API has not yet added the target TreeMaker, context-preview, or generation routes that will consume the newer validators.
 - There is no WebSocket implementation yet; the centralized realtime contract remains transport-ready only.
 - `GET /health` only returns `{ "status": "ok" }`; it does not verify database health.
-- Topic route handling is currently broken: `handleApiRequest` rejects every path other than `/conversations` and `/conversations/:id` before evaluating topic/node routes. The topic endpoints documented in `docs/api-contracts.md` therefore currently return `404`.
-- Topic/node identifiers are not UUID-validated. Topic update bodies bypass the corresponding validator.
-- Conversation detail currently returns archived topics; target normal graph responses must hide archived topics and their descendants.
+- `/workspaces` is a product-facing alias for the existing `/conversations` persistence-compatible API. Workspace detail returns `{ workspace, topics, nodes, activeTopicId }`; the legacy route retains `{ conversation, topics, nodes, activeTopicId }`.
+- Topic/node identifiers and topic/update/move/context/pin request bodies are runtime-validated. Topic parent ownership, cycles, archived parents, active topic/node ownership, and node parent ownership are enforced by the service/repository layer.
+- Normal graph detail omits archived topics, their descendants, and nodes belonging to those hidden topics; pruned nodes remain omitted.
 
 ### Frontend
 
@@ -149,11 +150,11 @@ Errors use `{ "error": { "code": string, "message": string, "details"?: string[]
 - The graph renders topic-to-topic edges, topic-to-message ownership edges, and message-to-message edges.
 - A selected topic highlights its topic ancestry; a selected message identifies its owning topic. There is no implemented context-path calculation.
 - Root topics are laid out as a forest. Root message placement is special-cased; nested message layout is incomplete.
-- The API includes all unpruned nodes and currently includes archived topics in a normal detail response.
+- Normal workspace graph responses include unpruned nodes for visible topics and omit archived topics with their descendants.
 
 ## Test coverage and command gaps
 
-Existing tests cover a small set of validators, root-node parent ownership, pruned-node query filtering, the health handler, the static client REST call, and helper ancestry/truncation. They do not cover topic routes, topic cycles/ownership, active-pointer validation, archives, context state, graph layout branches, generation/provider behavior, WebSockets, database migrations/seeds, real HTTP against PostgreSQL, browser workflows, Docker, or CI.
+Existing tests cover shared route validators, topic move-cycle and ownership checks, archived graph filtering, node pin persistence, handler-level workspace/topic route dispatch, root-node parent ownership, pruned-node query filtering, the health handler, the static client REST call, and helper ancestry/truncation. They do not yet cover real HTTP against PostgreSQL, full active-pointer mutation flows, graph layout branches, generation/provider behavior, WebSockets, database migrations/seeds, browser workflows, Docker, or CI.
 
 The per-package `test` glob is `node --test dist/**/*.test.js`. It executes tests in subdirectories but does not execute direct `dist/server.test.js` files; consequently API and web server tests compile but are omitted from `npm test`. This is a command/test-runner defect to correct in a future test-infrastructure ticket.
 
@@ -187,7 +188,7 @@ This is an audit-driven implementation checklist; ticket names can be aligned wi
 - [ ] 03 — Audit/repair fresh PostgreSQL migration behavior and document compatibility/backfill policy.
 - [ ] 04 — Add the remaining additive domain schema: capsules, TreeMaker runs, generations, and snapshots.
 - [x] 05 — Implement and test shared runtime schemas, DTOs, discriminated generation requests, and realtime envelopes.
-- [ ] 06 — Implement topic/message graph services: ownership, active IDs, cycle prevention, archive/prune, pin, and move.
+- [x] 06 — Implement topic/message graph services: ownership, active IDs, cycle prevention, archive visibility, pin, and move. Pruning remains a later route/workflow.
 - [ ] 07 — Implement deterministic context capsules and safe migration/backfill behavior.
 - [ ] 08 — Implement the independently tested deterministic Context Engine and context-preview API.
 - [ ] 09 — Implement provider abstraction, deterministic mock provider, and validated environment modes.

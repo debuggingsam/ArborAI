@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateStartGenerationRequest } from './index.js';
+import { ContextPreviewRequestSchema, GenerationRequestSchema, NodeRole, NodeStatus, TreeMakerDecisionSchema, WebSocketEvent, WebSocketEventEnvelopeSchema, validateCreateConversationRequest, validateMoveTopicRequest, validatePinRequest, validateStartGenerationRequest, validateUpdateTopicRequest } from './index.js';
 
 test('exports stable node and WebSocket contract values', () => {
   assert.equal(NodeRole.Assistant, 'assistant');
@@ -17,6 +17,15 @@ test('rejects malformed external request payloads', () => {
   const result = validateCreateConversationRequest({ title: '', systemPrompt: 42 });
   assert.equal(result.success, false);
   if (!result.success) assert.deepEqual(result.errors, ['title must be a non-empty string', 'systemPrompt must be a string when provided']);
+});
+
+test('validates topic moves, metadata updates, and node pin state', () => {
+  assert.equal(validateMoveTopicRequest({ parentTopicId: null }).success, true);
+  assert.equal(validateMoveTopicRequest({}).success, false);
+  assert.equal(validateUpdateTopicRequest({ title: 'Renamed topic' }).success, true);
+  assert.equal(validateUpdateTopicRequest({}).success, false);
+  assert.equal(validatePinRequest({ pinned: true }).success, true);
+  assert.equal(validatePinRequest({ pinned: 'true' }).success, false);
 });
 
 test('validates each generation mode and rejects a malformed discriminated member', () => {
